@@ -12,12 +12,13 @@ def compute_rotation_angle(satAz1, satEl1, satAz2, satEl2):
         ( cot(satEl1) * math.sin(satAz1) - math.sin(satAz2) * cot(satEl2) )
     return math.atan(rot_angle)
 
-def compute_axis_displacement_ratios(angle):
+def compute_roof2roof_constants(satAz1, satEl1, satAz2, satEl2):
     """
-    Computes displacement on X & Y axis using angle value.
-    Used for decoupling disparity or elevation values to X & Y axis
+    Computes roof to roof translation coeficients between two orthos using acquisation angles
     """
-    dx = math.cos(angle)
-    dy = math.sin(angle)
-    return dx,dy
+    dX = math.sin(satAz1)/math.tan(satEl1) - math.sin(satAz2)/math.tan(satEl2)
+    dY = math.cos(satAz1)/math.tan(satEl1) - math.cos(satAz2)/math.tan(satEl2)
+    return dX, dY
+
+
 
