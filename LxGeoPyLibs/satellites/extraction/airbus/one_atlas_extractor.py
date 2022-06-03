@@ -10,7 +10,7 @@ import click
 from zipfile import ZipFile 
 import os
 import shutil
-from LxGeoPyLibs.vendor.gdal import gdal_merge as gm
+from osgeo_utils import gdal_merge as gm
 
 def extract_single_zip(zip_file_path, extract_path):
     """
