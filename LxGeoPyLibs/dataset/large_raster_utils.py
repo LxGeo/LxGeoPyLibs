@@ -30,6 +30,24 @@ dtype_to_format = {
 }
 
 
+def load_vips(image_descriptor):
+    """
+    Function to load pyvips image from descriptor.
+    image_descriptor: Union[ str, numpy_array, pyvips_image]
+    """
+    if type(image_descriptor) == str :
+        assert os.path.exists(image_descriptor), "Image not found!"
+        vips_image = pyvips.Image.new_from_file(image_descriptor)
+    elif type(image_descriptor) == np.ndarray:
+        vips_image = numpy2vips(image_descriptor)
+    elif type(image_descriptor) == pyvips.Image:
+        vips_image = pyvips.Image.new_from_image(image_descriptor)
+    else:
+        raise Exception("Not recognized image descriptor of type {}".format(type(image_descriptor)))
+    
+    return vips_image
+
+
 def numpy2vips(a):
     height, width, bands = a.shape
     linear = a.reshape(width * height * bands)
@@ -63,14 +81,16 @@ def rotate_large_raster(raster_descriptor, rotation_angle):
     Returns:
         numpy array
     """
-    vips_image = None
-    if type(raster_descriptor) == str :
-        assert os.path.exists(raster_descriptor), "Raster not found!"
-        vips_image = pyvips.Image.new_from_file(raster_descriptor)
-    elif type(raster_descriptor) == np.ndarray:
-        vips_image = numpy2vips(raster_descriptor)
-    else:
-        raise Exception("Not recognized raster descriptor of type {}".format(type(raster_descriptor)))
+    vips_image =load_vips(raster_descriptor)
     
+    """
+    forward_translation_mat = Affine.translation(*rotation_center)
+    rotation_mat = Affine.rotation(rotation_angle)
+    backward_translation_mat = Affine.translation(-rotation_center[0], -rotation_center[1])
+    combined_mat = forward_translation_mat * rotation_mat * backward_translation_mat
+    vips_transform_matrix = (combined_mat.a, combined_mat.b, combined_mat.d, combined_mat.e)
+    rot_vips_image = vips_image.affine(vips_transform_matrix, idx=combined_mat.xoff, idy=combined_mat.yoff)   
+    """
+
     rot_vips_image = vips_image.rotate(rotation_angle)    
     return vips2numpy(rot_vips_image)
