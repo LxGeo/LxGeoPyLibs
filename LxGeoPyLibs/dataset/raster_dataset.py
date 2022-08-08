@@ -63,9 +63,7 @@ class RasterDataset(Dataset):
         if patch_overlap: self.patch_overlap= patch_overlap
 
         self.window_x_starts = np.arange(-self.patch_overlap[0], self.X_size-self.patch_overlap[0], self.patch_size[0]-self.patch_overlap[0]*2)
-        #if (self.X_size-1)%self.patch_size[0] != 0: self.window_x_starts.append(self.X_size-1-self.patch_size[0])
         self.window_y_starts = np.arange(-self.patch_overlap[1], self.Y_size-self.patch_overlap[1], self.patch_size[1]-self.patch_overlap[1]*2)
-        #if (self.Y_size-1)%self.patch_size[1] != 0: self.window_y_starts.append(self.Y_size-1-self.patch_size[1])
         self.is_setup=True
 
     def __len__(self):
@@ -114,7 +112,14 @@ class RasterDataset(Dataset):
 
     def predict_to_file(self, out_file, model, tile_size=(256,256), post_processing_fn=lambda x:x, augmentations=None ):
         """
-        
+        Runs prediction and postprocessing if provided using prediction model and save to raster.
+        Args:
+            -out_file: string path to output file
+            -model: callable prediction model having following methods (batch_size, min_patch_size )
+            -tile_size: tile size is multiple of 16.
+            -post_processing_fn: a callable to postprocess prediction. Must be callable on 4d tensors (batched).
+            -augmentations: a list of augmentation must be from LxGeoPylibs.vision.imageTransformation or callable
+             that takes two position parameters as images (image, gt) and returns a tuple of transformed images.        
         """
 
         if augmentations is None:
@@ -138,18 +143,14 @@ class RasterDataset(Dataset):
         self.setup(patch_size, overlap)
 
         # temp post processing out type
-        sample_output = post_processing_fn(model( torch.stack([self[0]*batch_size]) )).numpy()
-        out_band_count=sample_output.shape[1]
+        sample_output = post_processing_fn(model( torch.stack([self[0]]*batch_size) )).numpy()
+        out_band_count=sample_output.shape[-3]
 
         out_profile = rasters_map[self.image_path].profile.copy()
         out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1]})
         
         with rio.open(out_file, "w", **out_profile) as target_dst:
 
-            gdf = gpd.GeoDataFrame([(None,None,box(*target_dst.bounds))], columns=["idx","type", "geometry"], crs=target_dst.crs)
-            gdf.to_file("../DATA_SANDBOX/out_file.shp")
-            
-            #model.model.training=False
             with torch.no_grad():
                 
                 def combine_and_write_tile(item):
@@ -165,18 +166,7 @@ class RasterDataset(Dataset):
                     tile_pred = mean_patch_pred[:,overlap[0]:overlap[0]+tile_y_size, overlap[1]:overlap[1]+tile_x_size]
                     c_window = rio.windows.Window(c_tile_x_start, c_tile_y_start, tile_x_size, tile_y_size )
                     target_dst.write(tile_pred,window=c_window)
-
-                    # temp for window check
-                    c_tile_window = rio.windows.Window(c_tile_x_start, c_tile_y_start, tile_size[0], tile_size[1] )
-                    tile_geom = box(*rio.windows.bounds(c_tile_window,target_dst.transform))
-                    c_patch_window = rio.windows.Window(self.window_x_starts[tile_idx//len(self.window_y_starts)],
-                     self.window_y_starts[tile_idx%len(self.window_y_starts)], self.patch_size[0], self.patch_size[1] )
-                    patch_geom = box(*rio.windows.bounds(c_patch_window,target_dst.transform))
-                    window_geom_tuples=[]
-                    window_geom_tuples.append( (tile_idx, 0, tile_geom) )
-                    window_geom_tuples.append( (tile_idx, 1, patch_geom) )
-                    gdf = gpd.GeoDataFrame(window_geom_tuples, columns=["idx","type", "geometry"], crs=target_dst.crs)
-                    gdf.to_file("../DATA_SANDBOX/out_file.shp", mode="a")
+                    return
 
                 to_predict_queue = [] # a list of tuples (tile_index, tile_array)
                 MAX_CACHE_SIZE=1+(batch_size//len(augmentations))
@@ -226,7 +216,7 @@ class test_model():
         return x
     
     def batch_size(self):
-        return 12
+        return 13
     
     def min_patch_size(self):
         return 128
@@ -237,5 +227,7 @@ if __name__ == "__main__":
     c_r = RasterDataset(in_file)
     mdl = test_model()
     out_file = "../DATA_SANDBOX/out_file.tif"
-    c_r.predict_to_file(out_file, mdl, augmentations=[Trans_Identity()]*5)
+    from functools import partial
+    bands_combiner = partial(torch.sum, dim=1, keepdim=True)
+    c_r.predict_to_file(out_file, mdl, post_processing_fn=bands_combiner, tile_size=(160,160))
     pass
