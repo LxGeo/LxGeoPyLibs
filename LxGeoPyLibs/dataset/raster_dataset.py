@@ -9,9 +9,10 @@ from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from LxGeoPyLibs.geometry.grid import make_grid
-from shapely.geometry import box
+from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
 import pygeos
 import tqdm
+from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
 
 class RasterRegister(dict):
 
@@ -26,13 +27,13 @@ class RasterRegister(dict):
 rasters_map=RasterRegister()
 lock = multiprocessing.Lock()
 
-class RasterDataset(Dataset):
+class RasterDataset(Dataset, PatchifiedDataset):
     
     READ_RETRY_COUNT = 4
     DEFAULT_PATCH_SIZE = (256,256)
     DEFAULT_PATCH_OVERLAP = 100
 
-    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, patch_size=None, patch_overlap=None):
+    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, patch_size=None, patch_overlap=None):
                         
         assert os.path.isfile(image_path), f"Can't find raster in {image_path}"
         
@@ -47,15 +48,25 @@ class RasterDataset(Dataset):
             self.image_path: rio.open(self.image_path)
             })
         
-        self.Y_size, self.X_size = rasters_map[self.image_path].shape
+        self.Y_size, self.X_size = self.rio_dataset().shape
              
         self.patch_size = patch_size
         self.patch_overlap = patch_overlap
+        
+        raster_total_bound_geom = pygeos.box(*self.rio_dataset().bounds)
+        if bounds_geom:
+            assert pygeos.intersects(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
+            self.bounds_geom = bounds_geom
+        else:
+            self.bounds_geom = raster_total_bound_geom
 
         self.preprocessing=preprocessing
         self.is_setup=False
         if not None in (patch_size, patch_overlap):
-            self.setup_spatial(patch_size, patch_overlap)
+            self.setup_spatial(patch_size, patch_overlap, self.bounds_geom)
+    
+    def rio_dataset(self):
+        return rasters_map[self.image_path]
     
     def setup_spatial(self, patch_size, patch_overlap, bounds_geom=None):
         """
@@ -70,49 +81,48 @@ class RasterDataset(Dataset):
         
         # If no bounds provided, use image bounds
         if not bounds_geom:
-            bounds_geom = pygeos.box(*rasters_map[self.image_path].bounds)
+            bounds_geom = self.bounds_geom
 
-        pixel_x_size = rasters_map[self.image_path].transform[0]
-        pixel_y_size = -rasters_map[self.image_path].transform[4]
+        pixel_x_size = self.rio_dataset().transform[0]
+        pixel_y_size = -self.rio_dataset().transform[4]
 
-        self.patch_size_spatial = (self.patch_size[0]*pixel_x_size, self.patch_size[1]*pixel_y_size)
-        self.patch_overlap_spatial = self.patch_overlap*pixel_x_size
+        patch_size_spatial = (self.patch_size[0]*pixel_x_size, self.patch_size[1]*pixel_y_size)
+        patch_overlap_spatial = self.patch_overlap*pixel_x_size
 
-        # buffer bounds_geom to include out of bound area
-        buff_bounds_geom = pygeos.buffer(bounds_geom, self.patch_overlap_spatial, cap_style="square", join_style="mitre")
-        grid_step = self.patch_size_spatial[0]-self.patch_overlap_spatial*2, self.patch_size_spatial[1]-self.patch_overlap_spatial*2
-        self.patch_grid = make_grid(buff_bounds_geom, grid_step[0], grid_step[1], self.patch_size_spatial[0], self.patch_size_spatial[1],
-        filter_predicate = lambda x: pygeos.intersects(x, bounds_geom) )
-        
-        #tile_grid = pygeos.buffer(patch_grid, -2*self.patch_overlap, cap_style="square", join_style="mitre")
-        self.is_setup=True
+        super(Dataset, self).__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+    
+    def gsd(self):
+        return abs(self.rio_dataset().transform[0])
 
     def __len__(self):
         assert self.is_setup, "Dataset is not set up!"
-        return len(self.patch_grid)*len(self.augmentation_transforms)
+        return super(Dataset, self).__len__()*len(self.augmentation_transforms)
     
     @lru_cache
-    def _load_padded_raster_window(self, window_geom):
+    def _load_padded_raster_window(self, window_geom, patch_size=None):
         """
         Function to load image data by window and applying respective padding if requiered.
         """
 
-        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=rasters_map[self.image_path].transform)
+        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform)
         
         lock.acquire()
         for _ in range(self.READ_RETRY_COUNT):
             try:
-                img = rasters_map[self.image_path].read(window=c_window)
+                img = self.rio_dataset().read(window=c_window)
                 break
             except rio.errors.RasterioIOError as e:
                 lock.release()
         lock.release()
-
+        
+        if not patch_size:
+            patch_size = self.patch_size
+        assert patch_size, "Patch size is not set for loading padded windows!"
         ## padding check
         left_pad = int(-min(0, c_window.col_off))
-        right_pad = int(max(self.X_size, c_window.col_off+self.patch_size[0]) - self.X_size)
+        right_pad = int(max(self.X_size, c_window.col_off+patch_size[0]) - self.X_size)
         up_pad = int(-min(0, c_window.row_off))
-        down_pad = int(max(self.Y_size, c_window.row_off+self.patch_size[1]) - self.Y_size)
+        down_pad = int(max(self.Y_size, c_window.row_off+patch_size[1]) - self.Y_size)
         if any([left_pad, right_pad, up_pad, down_pad]):
             pad_sett = (0,0),(up_pad, down_pad), (left_pad, right_pad)
             img = np.pad(img, pad_sett)
@@ -125,7 +135,7 @@ class RasterDataset(Dataset):
         window_idx = idx // (len(self.augmentation_transforms))
         transform_idx = idx % (len(self.augmentation_transforms))
         
-        window_geom = self.patch_grid[window_idx]
+        window_geom = super(Dataset, self).__getitem__(window_idx)
         
         img = self._load_padded_raster_window(window_geom)
         
@@ -172,12 +182,12 @@ class RasterDataset(Dataset):
         sample_output = post_processing_fn(model( torch.stack([self[0]]*batch_size) )).numpy()
         out_band_count=sample_output.shape[-3]
 
-        out_profile = rasters_map[self.image_path].profile.copy()
+        out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
         out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1]})
         
         with rio.open(out_file, "w", **out_profile) as target_dst:
             
-            target_bound_geom = pygeos.box(*target_dst.bounds)
+            target_bound_window = rio.windows.Window(0,0, target_dst.width, target_dst.height)
 
             with torch.no_grad():
                 
@@ -189,15 +199,20 @@ class RasterDataset(Dataset):
                     mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
 
                     c_patch_geom = self.patch_grid[tile_idx]
-                    c_tile_geom = pygeos.buffer(c_patch_geom, -self.patch_overlap_spatial, cap_style="square", join_style="mitre")
-                    #cropping tile within target dataset
-                    c_tile_geom = pygeos.intersection(c_tile_geom, target_bound_geom)
-                    c_tile_window = rio.windows.from_bounds(*pygeos.bounds(c_tile_geom), transform=rasters_map[self.image_path].transform)
+                    c_tile_geom = pygeos.buffer(c_patch_geom, -self.spatial_patch_overlap, cap_style="square", join_style="mitre")
+                    c_tile_window = rio.windows.from_bounds(*pygeos.bounds(c_tile_geom), transform=out_profile["transform"])
+                    
+                    #cropping tile window within target dataset bounds
+                    c_cropped_tile_window =  target_bound_window.intersection(c_tile_window)
+                    col_left_shift = c_cropped_tile_window.col_off - c_tile_window.col_off
+                    row_up_shift = c_cropped_tile_window.row_off - c_tile_window.row_off
 
                     tile_pred = mean_patch_pred[
-                        :,self.patch_overlap:self.patch_overlap+int(c_tile_window.width),
-                        self.patch_overlap:self.patch_overlap+int(c_tile_window.height)]
-                    target_dst.write(tile_pred,window=c_tile_window)
+                        :,
+                        math.floor(self.patch_overlap+row_up_shift):math.floor(self.patch_overlap+row_up_shift+c_cropped_tile_window.height),
+                        math.floor(self.patch_overlap+col_left_shift):math.floor(self.patch_overlap+col_left_shift+c_cropped_tile_window.width)
+                        ]
+                    target_dst.write(tile_pred,window=c_cropped_tile_window)
                     return
 
                 to_predict_queue = [] # a list of tuples (tile_index, tile_array)
@@ -254,7 +269,8 @@ class test_model():
 if __name__ == "__main__":
 
     in_file = "../DATA_SANDBOX/lxFlowAlign/data/train_data/paris_ortho1_rooftop/flow.tif"
-    c_r = RasterDataset(in_file)
+    bounds_geom = pygeos.from_wkt("Polygon ((448802.2469462308799848 5416825.38489830307662487, 450379.91402398276841268 5416849.24877006746828556, 450387.85829028114676476 5415905.49685881659388542, 448853.9416441610082984 5415957.20191430393606424, 448802.2469462308799848 5416825.38489830307662487))")
+    c_r = RasterDataset(in_file, bounds_geom=bounds_geom)
     mdl = test_model()
     out_file = "../DATA_SANDBOX/out_file.tif"
     from functools import partial
