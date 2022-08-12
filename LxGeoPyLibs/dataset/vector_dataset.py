@@ -72,7 +72,10 @@ class VectorDataset(PatchifiedDataset):
 
         features_coords = []
         for c_feature in self.fio_dataset().filter(bbox=pygeos.bounds(window_geom).tolist()):
-            features_coords.append( c_feature["geometry"]["coordinates"] )
+            if c_feature["geometry"]["type"].lower().startswith("multi"):
+                features_coords.extend(c_feature["geometry"]["coordinates"])
+            else:
+                features_coords.append( c_feature["geometry"]["coordinates"] )
         
         pygeos_geom_creator = get_pygeos_geom_creator(self.vector_geometry_type())
 
