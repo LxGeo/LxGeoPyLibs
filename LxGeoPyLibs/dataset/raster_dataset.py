@@ -7,7 +7,6 @@ import torch
 from torch.utils.data import Dataset
 from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
-from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from LxGeoPyLibs.geometry.grid import make_grid
 from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
 import pygeos
@@ -104,7 +103,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         Function to load image data by window and applying respective padding if requiered.
         """
 
-        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform)
+        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform).round_offsets()
         
         lock.acquire()
         for _ in range(self.READ_RETRY_COUNT):
@@ -149,123 +148,8 @@ class RasterDataset(Dataset, PatchifiedDataset):
         
         return img
 
-    def predict_to_file(self, out_file, model, tile_size=(256,256), post_processing_fn=lambda x:x, augmentations=None ):
-        """
-        Runs prediction and postprocessing if provided using prediction model and save to raster.
-        Args:
-            -out_file: string path to output file
-            -model: callable prediction model having following methods (batch_size, min_patch_size )
-            -tile_size: tile size is multiple of 16.
-            -post_processing_fn: a callable to postprocess prediction. Must be callable on 4d tensors (batched).
-            -augmentations: a list of augmentation must be from LxGeoPylibs.vision.imageTransformation or callable
-             that takes two position parameters as images (image, gt) and returns a tuple of transformed images.        
-        """
-
-        if augmentations is None:
-            augmentations=[Trans_Identity()]
-        else:
-            augmentations = augmentations
-        
-        batch_size = model.batch_size()
-        min_patch_size = model.min_patch_size()
-        assert tile_size[0]>min_patch_size, "Tile size is lower than minimum patch size of the model!"
-        
-        patch_size = (
-            (math.floor(tile_size[0]/min_patch_size)+1)*min_patch_size,
-            (math.floor(tile_size[1]/min_patch_size)+1)*min_patch_size
-         )
-        overlap = (patch_size[0]-tile_size[0])//2
-        # setup tile loading 
-        self.setup_spatial(patch_size, overlap)
-
-        # temp post processing out type
-        sample_output = post_processing_fn(model( torch.stack([self[0]]*batch_size) )).numpy()
-        out_band_count=sample_output.shape[-3]
-
-        out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
-        out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1]})
-        
-        with rio.open(out_file, "w", **out_profile) as target_dst:
-            
-            target_bound_window = rio.windows.Window(0,0, target_dst.width, target_dst.height)
-
-            with torch.no_grad():
-                
-                def combine_and_write_tile(item):
-                    """
-                    Function to combine prediction of a single augmented patch and crop extra pixels using overlap value and finally save to dataset
-                    """
-                    tile_idx, prediction_list = item
-                    mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
-
-                    c_patch_geom = self.patch_grid[tile_idx]
-                    c_tile_geom = pygeos.buffer(c_patch_geom, -self.spatial_patch_overlap, cap_style="square", join_style="mitre")
-                    c_tile_window = rio.windows.from_bounds(*pygeos.bounds(c_tile_geom), transform=out_profile["transform"])
-                    
-                    #cropping tile window within target dataset bounds
-                    c_cropped_tile_window =  target_bound_window.intersection(c_tile_window)
-                    col_left_shift = c_cropped_tile_window.col_off - c_tile_window.col_off
-                    row_up_shift = c_cropped_tile_window.row_off - c_tile_window.row_off
-
-                    tile_pred = mean_patch_pred[
-                        :,
-                        math.floor(self.patch_overlap+row_up_shift):math.floor(self.patch_overlap+row_up_shift+c_cropped_tile_window.height),
-                        math.floor(self.patch_overlap+col_left_shift):math.floor(self.patch_overlap+col_left_shift+c_cropped_tile_window.width)
-                        ]
-                    target_dst.write(tile_pred,window=c_cropped_tile_window)
-                    return
-
-                to_predict_queue = [] # a list of tuples (tile_index, tile_array)
-                MAX_CACHE_SIZE=1+(batch_size//len(augmentations))
-                tile_pred_cache=FixSizeOrderedDict(max=MAX_CACHE_SIZE, on_del_lambda=combine_and_write_tile,
-                 before_delete_check=lambda x:len(x[1])==len(augmentations)
-                 )
-
-                def process_per_batch(to_predict_queue):
-                    """
-                    loads items from queue and runs prediction per batch and add to cache
-                    """
-                    c_batch = to_predict_queue[:batch_size]; del to_predict_queue[:batch_size]
-                    # unzip c_batch
-                    c_tiles_indices, c_batch = list(zip(*c_batch))
-                    if len(c_batch)<batch_size:
-                        missing_items_count = batch_size - len(c_batch)
-                        c_batch = list(c_batch) + [torch.zeros_like(c_batch[0])]*missing_items_count 
-                    
-                    c_batch = torch.stack(c_batch, 0)
-                    preds = model(c_batch); post_preds = post_processing_fn(preds)
-                    for c_tile_idx, c_pred in zip(c_tiles_indices, post_preds[:]):
-                        tile_pred_cache.setdefault(c_tile_idx, []).append(c_pred)
-                    
-                    return
-
-                for c_tile_idx, c_tile in tqdm.tqdm(enumerate(self), total=len(self)):
-                    # add augmented tile to queue
-                    to_predict_queue.extend( [(c_tile_idx, aug(c_tile, None)[0]) for aug in augmentations] )
-
-                    if len(to_predict_queue)>=batch_size:
-                        process_per_batch(to_predict_queue)
-                
-                # finish last cached items
-                if to_predict_queue: process_per_batch(to_predict_queue)
-                for _ in range(len(tile_pred_cache)): tile_pred_cache.popitem()
-
-
-
-class test_model():
-
-    def __init__(self) -> None:
-        pass
-
-    def __call__(self, x):
-        return x
     
-    def batch_size(self):
-        return 13
-    
-    def min_patch_size(self):
-        return 128
-
+from LxGeoPyLibs.dataset.patchified_dataset import test_model
 if __name__ == "__main__":
 
     in_file = "../DATA_SANDBOX/lxFlowAlign/data/train_data/paris_ortho1_rooftop/flow.tif"
