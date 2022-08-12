@@ -13,6 +13,10 @@ def rasterize_from_profile(geometry_iter, c_profile, burn_value):
     rasterize shapes of geometry iterator using the background profile and the burn value.
     returns a numpy array of raster
     """
+
+    if not geometry_iter:
+        return np.zeros((c_profile["height"], c_profile["width"]))
+
     def geom_burn_iter(geometry_iter,burn_value):
         if isinstance(burn_value,(list,pd.core.series.Series,np.ndarray)):
             for g,b in zip(geometry_iter, burn_value):
