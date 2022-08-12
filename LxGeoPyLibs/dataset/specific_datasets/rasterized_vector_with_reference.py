@@ -60,6 +60,8 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
         if bounds_geom:
             common_area_geom = pygeos.intersection(common_area_geom, bounds_geom)
         
+        self.bounds_geom=common_area_geom
+        
         if not None in (patch_size, patch_overlap):
             self.setup_spatial(patch_size, patch_overlap, common_area_geom)
         
@@ -97,7 +99,7 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
         img = self.image_dataset._load_padded_raster_window(window_geom, self.patch_size)
         vec = self.vector_dataset._load_vector_geometries_window(window_geom)
         # rasterio accepts only features that implements __geo_interface__
-        vec = map(lambda x: pygeos.to_shapely(x), vec)
+        vec = list(map(lambda x: pygeos.to_shapely(x), vec))
         rasterized_vec = self.rasterization_method(vec, window_geom, gsd=self.image_dataset.gsd(), crs=self.image_dataset.rio_dataset().crs)
         
         c_trans = self.augmentation_transforms[transform_idx]
@@ -110,7 +112,14 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
         rasterized_vec = torch.from_numpy(rasterized_vec).float()
         return img, rasterized_vec
     
-    
+    def get_stacked_batch(self, input_to_stack):
+
+        dezipped = list(zip(*input_to_stack))
+
+        return [ torch.stack(d) for d in dezipped ]
+
+    def gsd(self):
+        return self.image_dataset.gsd()
     
 
 if __name__ == "__main__":
