@@ -25,6 +25,8 @@ def get_pygeos_geom_creator(geom_type):
                 all_rings.append(pygeos.linearrings(c_ring))
                 indices.append(idx)
         
+        if not all_rings:
+            return []
         polygons = pygeos.polygons(all_rings, indices=indices)
         return polygons
 
