@@ -12,4 +12,5 @@ if __name__ == "__main__":
     keywords='DL, datasets, formulas',
     python_requires='>=3.7',
     install_requires=[],
+    packages=find_packages()
     )
