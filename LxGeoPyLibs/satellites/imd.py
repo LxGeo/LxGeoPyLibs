@@ -1,16 +1,25 @@
 
 ### Module for IMD files loading
 
-import os
+from pathlib import Path
 import yaml
 import click
 import xml.etree.ElementTree as ET
 from math import atan, pi, cos, sin, tan, atan2, radians, degrees, fabs
 
+class MissingImdFileParser(BaseException):
+    def __init__(self, extension:str=None):        
+        self.extension = extension
+        super(MissingImdFileParser, self).__init__()        
+        
+    def __str__(self):
+        if not self.extension:
+            return "File extension is not provided!"        
+        return f"File extension [{self.extension}] is not supported"
+    pass
+
 def mean(values_list):
     return float(sum(values_list))/len(values_list)
-
-
 
 def parse_GeoImd(imd_xml_file, imd_metadata_object):
 
@@ -82,8 +91,8 @@ class IMetaData:
         :param oScene: LxScene: the sat scene.
         :return:
         """
-        _, file_extension = os.path.splitext(imd_xml_file); file_extension=file_extension.lower()
-        if file_extension not in self.parsers_map: raise "Imd file parser not found!"
+        file_extension = Path(imd_xml_file).suffix.lower()
+        if file_extension not in self.parsers_map: raise MissingImdFileParser(file_extension)
         parser = self.parsers_map.get(file_extension.lower())
         parser(imd_xml_file, self)
         
