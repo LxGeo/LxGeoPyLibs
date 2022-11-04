@@ -16,7 +16,7 @@ class RasterWithRefsDataset(Dataset, PatchifiedDataset):
     """
 
     def __init__(self, image_path:str, ref_images_dict:typing.OrderedDict[str, str], force_coord_transform=False,
-     augmentation_transforms=None,preprocessing=None, ref_preprocessing: typing.DefaultDict[str, typing.Callable] = defaultdict(lambda x:x),bounds_geom=None, 
+     augmentation_transforms=None,preprocessing=None, ref_preprocessing: typing.DefaultDict[str, typing.Callable] = defaultdict(lambda :lambda x:x),bounds_geom=None, 
      patch_size=None, patch_overlap=None):
         """
         Args:
