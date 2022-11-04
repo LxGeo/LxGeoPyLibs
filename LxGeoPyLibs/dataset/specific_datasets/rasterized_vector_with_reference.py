@@ -103,7 +103,7 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
         rasterized_vec = self.rasterization_method(vec, window_geom, gsd=self.image_dataset.gsd(), crs=self.image_dataset.rio_dataset().crs)
         
         c_trans = self.augmentation_transforms[transform_idx]
-        img, rasterized_vec = c_trans(img, rasterized_vec)
+        img, rasterized_vec, _ = c_trans(img, rasterized_vec)
         
         if self.preprocessing:
             img = self.preprocessing(img)
