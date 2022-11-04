@@ -139,7 +139,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         img = self._load_padded_raster_window(window_geom)
         
         c_trans = self.augmentation_transforms[transform_idx]
-        img, _ = c_trans(img, img)
+        img, _, _ = c_trans(img, img)
         
         if self.preprocessing:
             img = self.preprocessing(img)
@@ -147,15 +147,18 @@ class RasterDataset(Dataset, PatchifiedDataset):
         img = torch.from_numpy(img).float()
         
         return img
+    
+    def get_stacked_batch(self, input_to_stack):
+        return [torch.stack(input_to_stack)]
 
     
-from LxGeoPyLibs.dataset.patchified_dataset import test_model
+from LxGeoPyLibs.dataset.patchified_dataset import CallableModel
 if __name__ == "__main__":
 
     in_file = "../DATA_SANDBOX/lxFlowAlign/data/train_data/paris_ortho1_rooftop/flow.tif"
     bounds_geom = pygeos.from_wkt("Polygon ((448802.2469462308799848 5416825.38489830307662487, 450379.91402398276841268 5416849.24877006746828556, 450387.85829028114676476 5415905.49685881659388542, 448853.9416441610082984 5415957.20191430393606424, 448802.2469462308799848 5416825.38489830307662487))")
     c_r = RasterDataset(in_file, bounds_geom=bounds_geom)
-    mdl = test_model()
+    mdl = CallableModel()
     out_file = "../DATA_SANDBOX/out_file.tif"
     from functools import partial
     bands_combiner = partial(torch.sum, dim=1, keepdim=True)
