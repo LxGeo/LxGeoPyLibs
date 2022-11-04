@@ -1,4 +1,4 @@
-from operator import mod
+import numpy as np
 from LxGeoPyLibs.geometry.grid import make_grid
 import pygeos
 import math
@@ -85,7 +85,9 @@ class PatchifiedDataset(object):
         # to device
         sample_input = [s.to(model.device) for s in sample_input]
         with torch.no_grad():
-            sample_output = post_processing_fn(model.predict_step( sample_input )).cpu().numpy()
+            sample_output = post_processing_fn(model.predict_step( sample_input ))
+            if type(sample_output) == torch.Tensor:
+                sample_output = sample_output.cpu().numpy()
         out_band_count=sample_output.shape[-3]
 
         out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
@@ -102,7 +104,8 @@ class PatchifiedDataset(object):
                     Function to combine prediction of a single augmented patch and crop extra pixels using overlap value and finally save to dataset
                     """
                     tile_idx, prediction_list = item
-                    mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
+                    #mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
+                    mean_patch_pred = np.stack(prediction_list, axis=0).mean(axis=0)
 
                     c_patch_geom = self.patch_grid[tile_idx]
                     c_tile_geom = pygeos.buffer(c_patch_geom, -self.spatial_patch_overlap, cap_style="square", join_style="mitre")
@@ -142,7 +145,10 @@ class PatchifiedDataset(object):
                     
                     c_batch = self.get_stacked_batch(c_batch)
                     c_batch = [s.to(model.device) for s in c_batch]
-                    preds = model.predict_step(c_batch); post_preds = post_processing_fn(preds).cpu()
+                    preds = model.predict_step(c_batch)
+                    post_preds = post_processing_fn(preds)#.cpu()
+                    if post_preds.is_cuda:
+                        post_preds = post_preds.cpu().numpy()
                     for c_tile_idx, c_pred in zip(c_tiles_indices, post_preds[:]):
                         tile_pred_cache.setdefault(c_tile_idx, []).append(c_pred)
                     
@@ -161,18 +167,21 @@ class PatchifiedDataset(object):
 
 
 
-class test_model():
+class CallableModel():
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, bs=1, mps=128):
+        super().__init__()
+        self.bs=bs
+        self.mps = mps
 
     def __call__(self, x):
-        if hasattr("forward"):
-            return self.forward(x)
-        return x
+        return self.forward(x)
     
     def batch_size(self):
-        return 12
+        return self.bs
     
     def min_patch_size(self):
-        return 128
+        return self.mps
+    
+    def predict_step(self, batch, batch_idx: int = None, dataloader_idx: int = 0):
+        return self(batch)
