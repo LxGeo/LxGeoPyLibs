@@ -25,3 +25,5 @@ def configure_logging(log_level: int):
     _logger.addHandler(console_log_handler)
     return
 
+configure_logging(logging.INFO)
+
