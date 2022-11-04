@@ -34,9 +34,9 @@ def parse_GeoImd(imd_xml_file, imd_metadata_object):
             aParts = sLine.split('=')
             if len(aParts) >= 2:
                 if aParts[0] == sSatElv:
-                    dSatElv = radians( float( aParts[1] ) )
+                    dSatElv = float( aParts[1] )
                 elif aParts[0] == sSatAzi :
-                    dSatAzi = radians( float( aParts[1] ) )
+                    dSatAzi = float( aParts[1] ) 
         except:
             raise IOError
     imd_metadata_object.dSatElv = dSatElv
@@ -101,15 +101,19 @@ class IMetaData:
         return self.satelliteID
     
     def satAzimuth(self):
+        # degrees
         return self.dSatAzi
 
     def satElevation(self):
+        # degrees
         return self.dSatElv
     
     def sunAzimuth(self):
+        # degrees
         return self.meanSunAz
         
     def sunElevation(self):
+        # degrees
         return self.meanSunEl
     
     def IMD_dict(self):
