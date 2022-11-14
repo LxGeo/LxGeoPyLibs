@@ -147,7 +147,7 @@ class PatchifiedDataset(object):
                     c_batch = [s.to(model.device) for s in c_batch]
                     preds = model.predict_step(c_batch)
                     post_preds = post_processing_fn(preds)#.cpu()
-                    if post_preds.is_cuda:
+                    if type(post_preds)==torch.Tensor and post_preds.is_cuda:
                         post_preds = post_preds.cpu().numpy()
                     for c_tile_idx, c_pred in zip(c_tiles_indices, post_preds[:]):
                         tile_pred_cache.setdefault(c_tile_idx, []).append(c_pred)
