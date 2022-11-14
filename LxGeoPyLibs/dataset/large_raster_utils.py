@@ -1,6 +1,7 @@
 import os
 import pyvips
 import numpy as np
+from typing import Union
 
 format_to_dtype = {
     'uchar': np.uint8,
@@ -43,8 +44,7 @@ def load_vips(image_descriptor):
     elif type(image_descriptor) == pyvips.Image:
         vips_image = pyvips.Image.new_from_image(image_descriptor)
     else:
-        raise Exception("Not recognized image descriptor of type {}".format(type(image_descriptor)))
-    
+        raise Exception("Not recognized image descriptor of type {}".format(type(image_descriptor)))    
     return vips_image
 
 
@@ -94,3 +94,24 @@ def rotate_large_raster(raster_descriptor, rotation_angle):
 
     rot_vips_image = vips_image.rotate(rotation_angle)    
     return vips2numpy(rot_vips_image)
+
+def crop_image(img: Union[np.ndarray, pyvips.Image], img_center=None, window_size=(2000,2000)):
+    """
+    Centerd image crop function.
+    Args:
+        img_center: Tuple of numerical values
+    """
+    if img_center is None:
+        img_center = ( img.width//2, img.height//2 )
+    else:
+        assert len(img_center)==2, "Image center should be a tuple of two numerical values"
+        assert int(img_center[0])==img_center[0] and int(img_center[1]) == img_center[1], "image center should be integer!"
+    crop_col_start, crop_col_end = max(0, img_center[0]-window_size[0]), min(img.width, img_center[0]+window_size[0])
+    crop_row_start, crop_row_end = max(0, img_center[1]-window_size[1]), min(img.height, img_center[1]+window_size[1])
+
+    if type(img)==np.ndarray:
+        return img[crop_col_start:crop_col_end, crop_row_start:crop_row_end]
+    elif type(img)==pyvips.Image:
+        return img.crop( crop_col_start, crop_row_start, crop_col_end-crop_col_start, crop_row_end-crop_row_start )
+    else:
+        raise Exception(f"Type {type(img)} is not supported for cropping!")
