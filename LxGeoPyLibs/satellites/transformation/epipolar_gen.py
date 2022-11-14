@@ -8,6 +8,7 @@ from LxGeoPyLibs.dataset.large_raster_utils import load_vips, vips2numpy, crop_i
 import cv2
 import numpy as np
 from scipy.stats import gaussian_kde
+import rasterio as rio
 
 
 def lazy_ref_epipolar_creation(iref1, iref2, i_alt1, i_alt2, epi1, epi2, rotation_angle):
@@ -15,6 +16,26 @@ def lazy_ref_epipolar_creation(iref1, iref2, i_alt1, i_alt2, epi1, epi2, rotatio
     Creates refined epipolar images using feature descriptor matching.
     Returns displacment applied vertically to refine epipolar/
     """
+    
+    with rio.open(iref1) as dst:
+        ref1_x_size = dst.transform[0]
+        ref1_bounds = dst.bounds
+
+    with rio.open(iref2) as dst:
+        ref2_x_size = dst.transform[0]
+        ref2_bounds = dst.bounds
+    
+    # resolution check
+    if (ref1_x_size != ref2_x_size):
+        _logger.warning("Images have different pixel size")
+        return
+    
+    bounds_displacment = [ abs(c1-c2) for c1,c2 in zip(ref1_bounds, ref2_bounds) ]
+    if any([ disp>ref1_x_size for disp in bounds_displacment ]):
+        _logger.warning("Images don't have the same bounds!")
+        return
+    
+
     img1 = load_vips(iref1)
     img2 = load_vips(iref2)
     img1_rot = img1.rotate(rotation_angle)
