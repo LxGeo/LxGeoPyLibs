@@ -9,6 +9,11 @@ import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from typing import Any
+from LxGeoPyLibs.satellites.transformation.rotations_fusion import reversed_bands_cummulation
+
+def window_round(in_window):
+    return rio.windows.Window(round(in_window.col_off),round(in_window.row_off),
+                              round(in_window.width), round(in_window.height))
 
 class PatchifiedDataset(object):
     """
@@ -105,7 +110,8 @@ class PatchifiedDataset(object):
                     """
                     tile_idx, prediction_list = item
                     #mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
-                    mean_patch_pred = np.stack(prediction_list, axis=0).mean(axis=0)
+                    fusion_fn = lambda x: reversed_bands_cummulation(x.max(0), max_val=1, bands_priority=[1,2,0])
+                    mean_patch_pred = fusion_fn(np.stack(prediction_list, axis=0))
 
                     c_patch_geom = self.patch_grid[tile_idx]
                     c_tile_geom = pygeos.buffer(c_patch_geom, -self.spatial_patch_overlap, cap_style="square", join_style="mitre")
@@ -115,13 +121,14 @@ class PatchifiedDataset(object):
                     if not rio.windows.intersect(target_bound_window,c_tile_window):
                         return
                     c_cropped_tile_window =  target_bound_window.intersection(c_tile_window)
+                    c_cropped_tile_window = window_round(c_cropped_tile_window)
                     col_left_shift = c_cropped_tile_window.col_off - c_tile_window.col_off
                     row_up_shift = c_cropped_tile_window.row_off - c_tile_window.row_off
 
                     tile_pred = mean_patch_pred[
                         :,
-                        math.floor(patch_overlap+row_up_shift):math.floor(patch_overlap+row_up_shift+c_cropped_tile_window.height),
-                        math.floor(patch_overlap+col_left_shift):math.floor(patch_overlap+col_left_shift+c_cropped_tile_window.width)
+                        round(patch_overlap+row_up_shift):round(patch_overlap+row_up_shift+c_cropped_tile_window.height),
+                        round(patch_overlap+col_left_shift):round(patch_overlap+col_left_shift+c_cropped_tile_window.width)
                         ]
                     target_dst.write(tile_pred,window=c_cropped_tile_window)
                     return
@@ -138,25 +145,26 @@ class PatchifiedDataset(object):
                     """
                     c_batch = to_predict_queue[:batch_size]; del to_predict_queue[:batch_size]
                     # unzip c_batch
-                    c_tiles_indices, c_batch = list(zip(*c_batch))
+                    c_tiles_indices, augs, c_batch = list(zip(*c_batch))
                     if len(c_batch)<batch_size:
                         missing_items_count = batch_size - len(c_batch)
                         c_batch = list(c_batch) + [c_batch[0]]*missing_items_count 
+                        augs = list(augs) + [Trans_Identity()]*missing_items_count
                     
-                    c_batch = self.get_stacked_batch(c_batch)
+                    c_batch = self.get_stacked_batch([c_aug(c_el)[0] for c_aug, c_el in zip(augs, c_batch)])
                     c_batch = [s.to(model.device) for s in c_batch]
                     preds = model.predict_step(c_batch)
                     post_preds = post_processing_fn(preds)#.cpu()
                     if post_preds.is_cuda:
                         post_preds = post_preds.cpu().numpy()
-                    for c_tile_idx, c_pred in zip(c_tiles_indices, post_preds[:]):
-                        tile_pred_cache.setdefault(c_tile_idx, []).append(c_pred)
+                    for c_tile_idx, c_aug, c_pred in zip(c_tiles_indices, augs, post_preds[:]):
+                        tile_pred_cache.setdefault(c_tile_idx, []).append(c_aug(c_pred, reverse=True)[0])
                     
                     return
 
                 for c_tile_idx, c_tile in tqdm.tqdm(enumerate(self), total=len(self)):
                     # add augmented tile to queue
-                    to_predict_queue.extend( [(c_tile_idx, aug(c_tile, None)[0]) for aug in augmentations] )
+                    to_predict_queue.extend( [(c_tile_idx, aug, c_tile) for aug in augmentations] )
 
                     if len(to_predict_queue)>=batch_size:
                         process_per_batch(to_predict_queue)
