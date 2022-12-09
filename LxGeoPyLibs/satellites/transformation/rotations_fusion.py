@@ -18,15 +18,17 @@ class aggregationMethod(Enum):
     circmean2 = 6
 
 
-def reversed_bands_cummulation(array, max_val=255):
+def reversed_bands_cummulation(array, max_val=255, bands_priority=None):
     """
     Kind of normalization with priority to revered order bands
     """
     rem = max_val * np.ones_like(array[0])
-    for c_band_idx in range(array.shape[0]-1,0,-1):
+    if not bands_priority:
+        bands_priority= range(array.shape[0]-1,0,-1)
+    for c_band_idx in bands_priority[:-1]:
         array[c_band_idx] = np.minimum(array[c_band_idx], rem)
         rem -= array[c_band_idx]    
-    array[0]=rem
+    array[bands_priority[-1]]=rem
     return array
 
 def aggregate_arrays(stacked: np.ndarray, method: aggregationMethod, nodata=None, axis=0, **kwargs):
