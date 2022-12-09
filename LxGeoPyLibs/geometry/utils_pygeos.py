@@ -36,7 +36,17 @@ def get_pygeos_geom_creator(geom_type):
         return points
 
     def linestring_loader(coords):
-        linestrings = pygeos.linestrings(coords)
+        
+        all_linestrings=[]
+        indices=[]
+        for idx, c_linestring in enumerate(coords):
+            all_linestrings.extend(c_linestring)
+            indices.extend([idx]*len(c_linestring))
+        
+        if not all_linestrings:
+            return []
+        
+        linestrings = pygeos.linestrings(all_linestrings, indices=indices)
         return linestrings
 
     if geom_type.lower() == "polygon":
