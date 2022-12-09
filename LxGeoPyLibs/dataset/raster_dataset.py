@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
 from LxGeoPyLibs.geometry.grid import make_grid
-from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
+from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset, window_round
 import pygeos
 import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
@@ -103,7 +103,8 @@ class RasterDataset(Dataset, PatchifiedDataset):
         Function to load image data by window and applying respective padding if requiered.
         """
 
-        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform).round_offsets()
+        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform)
+        c_window = window_round(c_window)
         
         lock.acquire()
         for _ in range(self.READ_RETRY_COUNT):
@@ -125,7 +126,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         if any([left_pad, right_pad, up_pad, down_pad]):
             pad_sett = (0,0),(up_pad, down_pad), (left_pad, right_pad)
             img = np.pad(img, pad_sett)
-        
+                
         return img
     
     def __getitem__(self, idx):
@@ -139,7 +140,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         img = self._load_padded_raster_window(window_geom)
         
         c_trans = self.augmentation_transforms[transform_idx]
-        img, _, _ = c_trans(img, img)
+        img, _ = c_trans(img, img)
         
         if self.preprocessing:
             img = self.preprocessing(img)
@@ -149,6 +150,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         return img
     
     def get_stacked_batch(self, input_to_stack):
+        input_to_stack = [torch.from_numpy(img.copy()) if type(img)==np.ndarray else img for img in input_to_stack]
         return [torch.stack(input_to_stack)]
 
     
