@@ -8,13 +8,13 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import box
 
-def rasterize_from_profile(geometry_iter, c_profile, burn_value):
+def rasterize_from_profile(geometry_iter, c_profile, burn_value, fill=0):
     """
     rasterize shapes of geometry iterator using the background profile and the burn value.
     returns a numpy array of raster
     """
 
-    if not geometry_iter:
+    if geometry_iter.empty:
         return np.zeros((c_profile["height"], c_profile["width"]))
 
     def geom_burn_iter(geometry_iter,burn_value):
@@ -30,7 +30,7 @@ def rasterize_from_profile(geometry_iter, c_profile, burn_value):
     out_dtype = c_profile["dtype"]
     out_raster = rasterize(geom_burn_iter(geometry_iter, burn_value),
                      (c_profile["height"], c_profile["width"]),
-                     fill=0,
+                     fill=fill,
                      transform=c_profile["transform"],
                      all_touched=True,
                      #default_value=None,
@@ -102,3 +102,12 @@ def parralel_rasterization(shapes_gdf, output_dst, burn_column):
         futures = executor.map(rasterize_view, concurrent_args)
         for window, result in zip(windows_list, futures):
             output_dst.write(result,1, window=window)
+
+from LxGeoPyLibs.geometry.rasterizers.polygons_rasterizer import polygons_to_multiclass, polygons_to_weighted_multiclass
+
+rasterizer_registery = {
+    
+    "polygons_to_multiclass":polygons_to_multiclass,
+    "polygons_to_weighted_multiclass": polygons_to_weighted_multiclass
+    
+}
