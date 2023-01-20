@@ -3,6 +3,8 @@ from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
 import multiprocessing
 import fiona
 import pygeos
+import shapely.geometry
+from collections.abc import Iterable
 from collections import OrderedDict, defaultdict
 from LxGeoPyLibs.geometry.utils_pygeos import get_pygeos_geom_creator
 import geopandas as gpd
@@ -54,6 +56,9 @@ class VectorDataset(PatchifiedDataset):
     def crs(self):
         return self.fio_dataset().crs["init"]
     
+    def bounds(self):
+        return self.fio_dataset().bounds
+    
     def vector_geometry_type(self):
         return self.fio_dataset().meta["schema"]["geometry"]
         
@@ -98,6 +103,13 @@ class VectorDataset(PatchifiedDataset):
             in_fields: an iterable of included field names (None : All fields)
             ex_fields: an iterable of excluded field names. 
         """
+        if type(window_geom) ==  pygeos.Geometry:
+            window_bounds = pygeos.bounds(window_geom).tolist()
+        elif type(window_geom )== shapely.geometry.polygon.Polygon:
+            window_bounds = window_geom.bounds
+        elif isinstance(window_geom, Iterable):
+            assert len(window_geom)==4, f"Window geometry of type {type(window_geom)} has more than 4 values!"
+            window_bounds = list(window_geom)
 
         if in_fields is None:
             fields_names_set = set(self.fio_dataset().schema['properties'].keys())
@@ -111,7 +123,7 @@ class VectorDataset(PatchifiedDataset):
 
         features_coords = []
         columns = defaultdict(list)
-        for c_feature in self.fio_dataset().filter(bbox=pygeos.bounds(window_geom).tolist()):
+        for c_feature in self.fio_dataset().filter(bbox=window_bounds):
             multipart_count=1
             if c_feature["geometry"]["type"].lower().startswith("multi"):
                 if ignore_multipart: continue
