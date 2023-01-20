@@ -20,5 +20,10 @@ def compute_roof2roof_constants(satAz1_r, satEl1_r, satAz2_r, satEl2_r):
     dY = math.cos(satAz1_r)/math.tan(satEl1_r) - math.cos(satAz2_r)/math.tan(satEl2_r)
     return dX, dY
 
+def nicolas_roof2roof(satAz1_r, satEl1_r, satAz2_r, satEl2_r):
+    num = math.tan(satEl1_r) * math.tan(satEl2_r)
+    denum = math.sqrt( math.tan(satEl1_r)**2 + math.tan(satEl2_r)**2 - 2*math.tan(satEl1_r)*math.tan(satEl2_r) *math.cos(satAz1_r-satAz2_r) )
+    return num / denum
+
 
 

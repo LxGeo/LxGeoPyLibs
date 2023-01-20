@@ -33,7 +33,7 @@ def aggregate_arrays(stacked: np.ndarray, method: aggregationMethod, nodata=None
     """
     Aggregates input arrays using method along axis
     """
-    stacked = stacked.astype("float"); stacked[stacked==nodata]=np.nan
+    #stacked = stacked.astype("float"); stacked[stacked==nodata]=np.nan
     if method == aggregationMethod.max:
         return reversed_bands_cummulation(stacked.max(axis))
     if method == aggregationMethod.min:
@@ -62,7 +62,7 @@ def get_stacked_view(datasets_map, st_row, st_col, tile_size):
     rotated_views_list = []
     for k,v in datasets_map.items():
         loaded_array = v.read(window=Window(st_row, st_col, tile_size, tile_size)).astype('float')
-        loaded_array[loaded_array==v.profile["nodata"]] = np.nan
+        #loaded_array[loaded_array==v.profile["nodata"]] = np.nan
         rotated_views_list.append(loaded_array)
     return np.stack(rotated_views_list)
 

@@ -1,10 +1,13 @@
 from LxGeoPyLibs.dataset.large_raster_utils import load_vips, vips2numpy
 import pyvips
 import click
+import json
+import affine
 import rasterio as rio
+import numpy as np
 from rasterio.plot import reshape_as_raster
 
-def disparity_to_dsm(disparity_map, inv_rotation_angle, v_displacement, out_dsm_path, profile, scale_factor=1/10 ):
+def disparity_to_dsm(disparity_map, inv_rotation_angle, v_displacement, out_dsm_path, profile, scale_factor ):
     """
     Apply reverse rotation of disparity map over respective image (epipolar 1 or 2)
     Args:
@@ -29,27 +32,40 @@ def disparity_to_dsm(disparity_map, inv_rotation_angle, v_displacement, out_dsm_
     start_h = (disparity_map_reversed.height//2 - profile['height']//2 )
     start_w = (disparity_map_reversed.width//2 - profile['width']//2 )    
     disparity_map_reversed = disparity_map_reversed.crop(start_w, start_h, profile['width'], profile['height'])
-    profile["dtype"] = rio.float32; profile["nodata"]=None; profile["count"]=1 
+    profile["dtype"] = rio.float32; profile["nodata"]=-32768*scale_factor; profile["count"]=1 
     with rio.open(out_dsm_path, "w", **profile) as tar:
         tar.write(reshape_as_raster(vips2numpy(disparity_map_reversed)))
 
 
 @click.command()
 @click.option('-idisp', '--input_disparity', required=True, type=click.Path(exists=True), help="Path to input disparity map")
-@click.option('-ro', '--ref_ortho', required=True, type=click.Path(exists=True), help="Path to original ortho image (not epipolar)")
-@click.option('-ira', '--inverse_rotation_angle', required=True, type=click.FLOAT, help="Rotation angle to use to inverse epipolarity")
-@click.option('-rvd', '--refinement_vertical_disp', required=True, type=click.INT, help="Vertical displacement used to refine epipolar")
+#@click.option('-ro', '--ref_ortho', required=True, type=click.Path(exists=True), help="Path to original ortho image (not epipolar)")
+#@click.option('-ira', '--inverse_rotation_angle', required=True, type=click.FLOAT, help="Rotation angle to use to inverse epipolarity")
+#@click.option('-rvd', '--refinement_vertical_disp', required=True, type=click.FLOAT, help="Vertical displacement used to refine epipolar")
 @click.option('-o', '--output_path', required=True, type=click.Path(), help="Path to output dsm map")
+@click.option('-c_f', '--couple_file', required=True, type=click.Path(exists=True), help="Couple file too be used to reverese disparity")
 @click.option('-sf', '--scale_factor', default=1/10, type=click.FLOAT, help="Scale factor used to turn disp into meters")
-def main(input_disparity, ref_ortho, inverse_rotation_angle, refinement_vertical_disp, output_path, scale_factor):
+def main(input_disparity, output_path, couple_file, scale_factor):
     
-    with rio.open(ref_ortho) as dst:
-        out_dsm_profile = dst.profile.copy()
-        out_dsm_profile.update({"count":1, "dtype":rio.float32})
+    with open(couple_file) as f:
+        details_dict=json.load(f)
+
+    out_dsm_profile = {
+        "width":details_dict["ref1_width"],
+        "height":details_dict["ref1_height"],
+        "crs":details_dict["crs"],
+        "transform": affine.Affine.from_gdal( *details_dict["ref1_transform"]),
+        "count":1, "dtype":rio.float32
+    }
+
     # disparity scale factor: (1/10) output disparity are in tenth of pixels & resolution is mandatory to get heights in meter
-    disparity_scale_factor = 1/10; disparity_scale_factor /= out_dsm_profile["transform"].a
+    disparity_scale_factor = scale_factor
+    disparity_scale_factor *= out_dsm_profile["transform"].a
+    disparity_scale_factor /= np.linalg.norm(details_dict["xy_cst"])
     
-    disparity_to_dsm(input_disparity, inverse_rotation_angle, refinement_vertical_disp, output_path, out_dsm_profile, scale_factor)
+    inverse_rotation_angle = -details_dict["rotation_angle"]
+    refinement_vertical_disp = -details_dict["v_disp"]
+    disparity_to_dsm(input_disparity, inverse_rotation_angle, refinement_vertical_disp, output_path, out_dsm_profile, disparity_scale_factor)
     
 
 if __name__ == "__main__":

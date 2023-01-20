@@ -74,6 +74,15 @@ def main(in_raster_path, out_raster_path, rotation_angle, keep_pixel_size):
         inplace_rotation(in_rio_dst, rotation_angle, out_raster_path, keep_pixel_size)
     
 if __name__ == "__main__":
-    #in_path = "/home/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/LA/oneAtlas_catalogs_extracted/PHR1A_acq20220728_del1070b795/ortho_t.tif"
-    #out_path = "/home/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/LA/oneAtlas_catalogs_extracted/PHR1A_acq20220728_del1070b795/ortho90_t.tif"
-    main()
+    import os
+    in_path = "/home/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/paris_tristereo_dhm_plus_external/prediction/PHR1A_acq20180326_del1b382d54/fusion/"
+    rot_dirs = os.listdir(in_path)
+    to_rot_maps = ["build_polyvectorfield_az.tif", "build_probas.tif"]
+    for c_rot_d in rot_dirs:
+        rot_val = int(c_rot_d.split("rot_")[1])
+        rot_enum = getattr(inplaceRotationAngle,"rot"+ str( (-rot_val+360)%360 ))
+        for c_to_rot_map in to_rot_maps:
+            out_name = "origi_"+c_to_rot_map
+            with rio.open(os.path.join(in_path, c_rot_d, c_to_rot_map)) as in_rio_dst:
+                inplace_rotation(in_rio_dst, rot_enum, os.path.join(in_path, c_rot_d, out_name), True)
+    #main()
