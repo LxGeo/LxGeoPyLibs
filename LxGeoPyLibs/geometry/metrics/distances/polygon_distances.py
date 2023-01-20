@@ -24,9 +24,18 @@ def multipolygon_option_wrapper(dist_func):
     return wrapped_func
 
 # preparing distance functions
-def prepare_dist_func(dist_func):
-    return np.vectorize(partial(multipolygon_option_wrapper(dist_func), symmetrise="average"))
+def prepare_dist_func(dist_func, distance_name):
 
-chamfer_distance = prepare_dist_func(chamfer_distance)
-hausdorff_distance = prepare_dist_func(hausdorff_distance)
-polis_distance = prepare_dist_func(polis_distance)
+    class distance_caller:
+        def __init__(self, callable, name):
+            self.name=name
+            self.callable=callable
+        def __call__(self, *args, **kwds):
+            return self.callable(*args, *kwds)
+
+    return distance_caller(np.vectorize(partial(multipolygon_option_wrapper(dist_func), symmetrise="average")), distance_name)
+
+chamfer_distance = prepare_dist_func(chamfer_distance, "chamfer_distance")
+hausdorff_distance = prepare_dist_func(hausdorff_distance, "hausdorff_distance")
+polis_distance = prepare_dist_func(polis_distance, "polis_distance")
+

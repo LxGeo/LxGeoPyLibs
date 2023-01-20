@@ -14,7 +14,7 @@ def rasterize_from_profile(geometry_iter, c_profile, burn_value):
     returns a numpy array of raster
     """
 
-    if not geometry_iter:
+    if len(geometry_iter)==0:
         return np.zeros((c_profile["height"], c_profile["width"]))
 
     def geom_burn_iter(geometry_iter,burn_value):
