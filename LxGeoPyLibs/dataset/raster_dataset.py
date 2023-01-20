@@ -67,7 +67,8 @@ class RasterDataset(Dataset, PatchifiedDataset):
     def rio_dataset(self):
         return rasters_map[self.image_path]
     
-    def setup_spatial(self, patch_size, patch_overlap, bounds_geom=None):
+    ### should be fixed to meters not pixels
+    def setup_pixel(self, patch_size, patch_overlap, bounds_geom=None):
         """
         Setup patch loading settings using spatial coordinates.
         Args:
@@ -90,8 +91,28 @@ class RasterDataset(Dataset, PatchifiedDataset):
 
         super(Dataset, self).__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
     
+    def setup_spatial(self, patch_size_spatial, patch_overlap_spatial, bounds_geom=None):
+        """
+        Setup patch loading settings using spatial coordinates.
+        Args:
+            patch_size: a tuple of positive integers in coords metric.
+            patch_overlap: a positive integer in coords metric.
+            bounds_geom: pygeos polygon
+        """
+        if not bounds_geom:
+            bounds_geom = self.bounds_geom
+        self.patch_size= (int(patch_size_spatial[0]/self.gsd()), int(patch_size_spatial[1]/self.gsd() ))
+        self.patch_overlap= int(patch_overlap_spatial/self.gsd())
+        super().__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+
     def gsd(self):
         return abs(self.rio_dataset().transform[0])
+    
+    def crs(self):
+        return self.rio_dataset().crs
+    
+    def bounds(self):
+        return self.rio_dataset().bounds
 
     def __len__(self):
         assert self.is_setup, "Dataset is not set up!"
