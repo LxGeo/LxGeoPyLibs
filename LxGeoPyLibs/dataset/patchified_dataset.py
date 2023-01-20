@@ -78,7 +78,7 @@ class PatchifiedDataset(object):
          )
         patch_overlap = (patch_size[0]-tile_size[0])//2
         # setup tile loading 
-        self.setup_spatial(patch_size, patch_overlap)
+        self.setup_pixel(patch_size, patch_overlap)
 
         # temp post processing out type
         sample_input = self.get_stacked_batch([self[0]]*batch_size)
@@ -91,7 +91,7 @@ class PatchifiedDataset(object):
         out_band_count=sample_output.shape[-3]
 
         out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
-        out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1]})
+        out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1], "crs":self.crs()})
         
         with rio.open(out_file, "w", **out_profile) as target_dst:
             
