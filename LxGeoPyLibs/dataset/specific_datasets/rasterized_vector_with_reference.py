@@ -121,6 +121,9 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
     def gsd(self):
         return self.image_dataset.gsd()
     
+    def crs(self):
+        return self.image_dataset.crs()
+    
 
 if __name__ == "__main__":
 
