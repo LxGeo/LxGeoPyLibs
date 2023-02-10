@@ -1,4 +1,5 @@
 import rasterio as rio
+from rasterio import windows
 
 def extents_to_profile(extent, gsd=0.5, **kwargs):
     
@@ -11,3 +12,9 @@ def extents_to_profile(extent, gsd=0.5, **kwargs):
     }
     rasterization_profile.update(kwargs)
     return rasterization_profile
+
+def window_round(in_window):
+    return rio.windows.Window(
+        round(in_window.col_off), round(in_window.row_off),
+        round(in_window.width), round(in_window.height)
+    )
