@@ -4,6 +4,7 @@ import rasterio as rio
 from affine import Affine
 import numpy as np
 import click
+import os
 
 class inplaceRotationAngle(Enum):
     rot0 = 0
@@ -70,10 +71,13 @@ def main(in_raster_path, out_raster_path, rotation_angle, keep_pixel_size):
     Program that rotates raster data array and transforms respective geotransform to keep the raster in its right position.
     Useful for post prediction fusion, since CNN are invariant to rotation.
     """
+    os.makedirs(os.path.dirname(out_raster_path), exist_ok=True)
     with rio.open(in_raster_path) as in_rio_dst:
         inplace_rotation(in_rio_dst, rotation_angle, out_raster_path, keep_pixel_size)
     
 if __name__ == "__main__":
+    main()
+    exit()
     import os
     in_path = "/home/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/paris_tristereo_dhm_plus_external/prediction/PHR1A_acq20180326_del1b382d54/fusion/"
     rot_dirs = os.listdir(in_path)
