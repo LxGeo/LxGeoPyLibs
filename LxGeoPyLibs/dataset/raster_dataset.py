@@ -176,12 +176,12 @@ class RasterDataset(Dataset, PatchifiedDataset):
 from LxGeoPyLibs.dataset.patchified_dataset import CallableModel
 if __name__ == "__main__":
 
-    in_file = "../DATA_SANDBOX/lxFlowAlign/data/train_data/paris_ortho1_rooftop/flow.tif"
-    bounds_geom = pygeos.from_wkt("Polygon ((448802.2469462308799848 5416825.38489830307662487, 450379.91402398276841268 5416849.24877006746828556, 450387.85829028114676476 5415905.49685881659388542, 448853.9416441610082984 5415957.20191430393606424, 448802.2469462308799848 5416825.38489830307662487))")
-    c_r = RasterDataset(in_file, bounds_geom=bounds_geom)
-    mdl = CallableModel()
-    out_file = "../DATA_SANDBOX/out_file.tif"
+    in_file = "C:/DATA_SANDBOX/Alignment_Project/PerfectGT/Pakistan_Rawalpindi_B_Neo/preds/build_probas.tif"
+    c_r = RasterDataset(in_file)
+    mdl = CallableModel(lambda x:np.expand_dims(np.argmax(x[0],axis=1),0).astype(np.uint8))
+    out_file = "C:/DATA_SANDBOX/Alignment_Project/PerfectGT/Pakistan_Rawalpindi_B_Neo/preds/build_labels.tif"
     from functools import partial
-    bands_combiner = partial(torch.sum, dim=1, keepdim=True)
-    c_r.predict_to_file(out_file, mdl, post_processing_fn=bands_combiner, tile_size=(256,256))
+    bands_combiner = None#partial(torch.sum, dim=1, keepdim=True)
+    c_r.predict_to_file(out_file, mdl)
+    #c_r.predict_to_file(out_file, mdl, post_processing_fn=bands_combiner, tile_size=(256,256))
     pass

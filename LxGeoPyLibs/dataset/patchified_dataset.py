@@ -169,10 +169,11 @@ class PatchifiedDataset(object):
 
 class CallableModel():
 
-    def __init__(self, bs=1, mps=128):
+    def __init__(self, callable=lambda x:x, bs=1, mps=128):
         super().__init__()
         self.bs=bs
         self.mps = mps
+        self.forward = callable
 
     def __call__(self, x):
         return self.forward(x)
