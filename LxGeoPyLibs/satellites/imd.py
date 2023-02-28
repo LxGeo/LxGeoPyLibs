@@ -63,6 +63,9 @@ def parse_XmlImd(imd_xml_file, imd_metadata_object):
     IncAAccrossRAD = IncAAccross * pi / 180
     IncAAlongRAD = IncAAlong * pi / 180
     
+    ## MODULO(AZi – (ATAN2( tan(βY) ; tan(βX)))) ; 360)
+    temp_azi = (azimA - degrees(atan2( tan(IncAAlongRAD), tan(IncAAccrossRAD)))) % 360
+    ## https://www.intelligence-airbusds.com/automne/api/docs/v1.0/document/download/ZG9jdXRoZXF1ZS1kb2N1bWVudC01NTY0Mw==/ZG9jdXRoZXF1ZS1maWxlLTU1NjQy/airbus-pleiades-imagery-user-guide-15042021.pdf
     meanSatAz = (degrees(atan2( tan(IncAAlongRAD), tan(IncAAccrossRAD))) ) % 360 +90
     
     if fabs( azimA - meanSatAz ) < 1.0 :
@@ -149,3 +152,9 @@ class IMetaData:
         
         coefsDict = { "coefX": getCstX(satAz, satEl), "coefY": getCstY(satAz, satEl) }
         return coefsDict
+    
+
+if __name__ == "__main__":
+    fp="/home/mcherif//Documents/DATA_SANDBOX/maskedMatching/sample1/PHR1A_acq20180326_del1b382d54/imd.XML"
+    a=IMetaData(fp)
+    print(a)
