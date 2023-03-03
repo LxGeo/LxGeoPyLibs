@@ -18,3 +18,16 @@ def window_round(in_window):
         round(in_window.col_off), round(in_window.row_off),
         round(in_window.width), round(in_window.height)
     )
+
+def get_required_padding(window, width, height):
+    """
+    int left_pad = -std::min<int>(xStart, 0);
+    int right_pad = std::max<int>(xStart + xSize, image.cols) - image.cols;
+    int top_pad = -std::min<int>(yStart, 0);
+    int down_pad = std::max<int>(yStart + ySize, image.rows) - image.rows;
+    """
+    left_pad = -min(window.col_off,0)
+    right_pad = max(window.col_off+window.width, width) - width
+    top_pad = -min(0, window.row_off)
+    bottom_pad = max(window.row_off + window.height, height) - height
+    return ( (top_pad, bottom_pad), (left_pad, right_pad) )
