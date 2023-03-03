@@ -95,7 +95,7 @@ class VectorDataset(PatchifiedDataset):
 
         return geometries
     
-    def _load_vector_features_window(self, window_geom, ignore_multipart=False, in_fields=None, ex_fields=None):
+    def _load_vector_features_window(self, window_geom, ignore_multipart=False, in_fields=None, ex_fields=None, field_names_rename_map=None):
         """
         Method to load features (geometry + fields) from vector map within a window
         Args:
@@ -118,8 +118,11 @@ class VectorDataset(PatchifiedDataset):
         
         if ex_fields is None:
             ex_fields=[]
+        if field_names_rename_map is None:
+            field_names_rename_map = dict()
         
         fields_names_set=fields_names_set.difference(set(ex_fields))
+        assert "id" != field_names_rename_map.get("id") , "Make sure that no field has name 'id' else you can use field_names_rename_map to rename id field"
 
         features_coords = []
         columns = defaultdict(list)
@@ -136,7 +139,8 @@ class VectorDataset(PatchifiedDataset):
 
             for k,v in c_feature["properties"].items():
                 if k in fields_names_set:
-                    columns[k].extend([v]*multipart_count)
+                    renamed_key = field_names_rename_map.get(k, k)
+                    columns[renamed_key].extend([v]*multipart_count)
         
         pygeos_geom_creator = get_pygeos_geom_creator(self.vector_geometry_type())
 
