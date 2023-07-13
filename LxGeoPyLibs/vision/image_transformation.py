@@ -73,18 +73,18 @@ flipud_fn = lambda x: np.flipud(x) if isinstance(x, np.ndarray) else torch.flipu
 class Trans_Flipud(Image_Transformation):
     
     def __fwd__(self, *args):
-        return tuple(np.flipud(c_arg) for c_arg in args)
+        return tuple(self.flipud_fn(c_arg) for c_arg in args)
     def __rwd__(self, *args):
-        return self.__fwd__(args)
+        return self.__fwd__(*args)
     
 
 fliplr_fn = lambda x: np.fliplr(x) if isinstance(x, np.ndarray) else torch.fliplr(x)
 class Trans_fliplr(Image_Transformation):
     
     def __fwd__(self, *args):
-        return tuple(np.fliplr(c_arg) for c_arg in args)
+        return tuple(fliplr_fn(c_arg) for c_arg in args)
     def __rwd__(self, *args):
-        return self.__fwd__(args)
+        return self.__fwd__(*args)
     
 class Trans_gaussian_noise(Image_Transformation):
     def __call__(self, image1, gt1):
