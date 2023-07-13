@@ -68,7 +68,8 @@ class Trans_Rot270(Image_Transformation):
     def __rwd__(self, *args):
         return Trans_Rot90()(*args)
         
-
+        
+flipud_fn = lambda x: np.flipud(x) if isinstance(x, np.ndarray) else torch.flipud(x) 
 class Trans_Flipud(Image_Transformation):
     
     def __fwd__(self, *args):
@@ -76,7 +77,8 @@ class Trans_Flipud(Image_Transformation):
     def __rwd__(self, *args):
         return self.__fwd__(args)
     
-    
+
+fliplr_fn = lambda x: np.fliplr(x) if isinstance(x, np.ndarray) else torch.fliplr(x)
 class Trans_fliplr(Image_Transformation):
     
     def __fwd__(self, *args):
