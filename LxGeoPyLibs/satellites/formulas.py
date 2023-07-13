@@ -24,6 +24,11 @@ def nicolas_roof2roof(satAz1_r, satEl1_r, satAz2_r, satEl2_r):
     denum = math.sqrt( math.tan(satEl1_r)**2 + math.tan(satEl2_r)**2 - 2*math.tan(satEl1_r)*math.tan(satEl2_r) *math.cos(satAz1_r-satAz2_r) )
     return num / denum
 
+def base_to_height_ratio(satAz1, satEl1, satAz2, satEl2):
+    """
+    TODO needs check
+    """
+    return math.tan(satAz1-satAz2) / ( math.tan(satEl1)-math.tan(satEl2) )
 
 
 if __name__=="__main__":
