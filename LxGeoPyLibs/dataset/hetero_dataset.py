@@ -1,18 +1,28 @@
 
 import typing
 from collections import OrderedDict
+from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
+from LxGeoPyLibs.dataset.raster_dataset import RasterDataset
+from LxGeoPyLibs.dataset.common_interfaces import PixelizedDataset
 import pygeos
 import torch
 
-class HeteroDataset(PatchifiedDataset):
+class HeteroDataset(RasterDataset):
 
     def __init__(self, sub_datasets_init : typing.OrderedDict[str, dict], spatial_patch_size=None, spatial_patch_overlap=None, bounds_geom=None):
         
+        self._raster_interface = None
         self.sub_datasets = OrderedDict()
         for dst_id, dst_definition in sub_datasets_init.items():
             dataset_type = dst_definition.pop("dataset_type")
             self.sub_datasets[dst_id] = dataset_type(**dst_definition)
+
+            # save raster interface
+            if isinstance(self.sub_datasets[dst_id], RasterDataset):
+                self._raster_interface = self.sub_datasets[dst_id]
+        
+        PixelizedDataset.__init__(self, pixel_x_size=self._raster_interface.pixel_x_size,pixel_y_size=self._raster_interface.pixel_y_size )
 
         common_area_geom = pygeos.intersection_all(
             [pygeos.box(*c_dataset.bounds()) for c_dataset in self.sub_datasets.values()]
@@ -46,9 +56,7 @@ class HeteroDataset(PatchifiedDataset):
         patch_size_spatial = (self.patch_size[0]*pixel_x_size, self.patch_size[1]*pixel_y_size)
         patch_overlap_spatial = self.patch_overlap*pixel_x_size
 
-        if not bounds_geom:
-            bounds_geom=self.bounds_geom
-        super().__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+        super(HeteroDataset, self).__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
         for dst in self.sub_datasets.values():
             dst.setup_spatial(patch_size_spatial, patch_overlap_spatial, bounds_geom)
     
@@ -57,8 +65,8 @@ class HeteroDataset(PatchifiedDataset):
         ## Temporary getitem
         
         assert self.is_setup, "Dataset is not set up!"
-        window_idx = idx        
-        window_geom = super().__getitem__(window_idx)                
+        window_idx = idx
+        window_geom = PatchifiedDataset.__getitem__(self, window_idx)                
         
         sub_items = []
         for k, dst in self.sub_datasets.items():
@@ -73,8 +81,13 @@ class HeteroDataset(PatchifiedDataset):
         return [ torch.stack(d) for d in dezipped ]
     
     def gsd(self):
-        return 0.5
+        return self.raster_interface().gsd()
     
     def crs(self):
         return list(self.sub_datasets.values())[0].crs()
+    
+    def raster_interface(self):
+        if self._raster_interface!=None:
+            return self._raster_interface
+        raise Exception("Hetero dataset missing a reference Raster Dataset!")
 
