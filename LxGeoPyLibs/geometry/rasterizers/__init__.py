@@ -8,7 +8,7 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import box
 
-def rasterize_from_profile(geometry_iter, c_profile, burn_value):
+def rasterize_from_profile(geometry_iter, c_profile, burn_value, background_fill=0):
     """
     rasterize shapes of geometry iterator using the background profile and the burn value.
     returns a numpy array of raster
@@ -30,7 +30,7 @@ def rasterize_from_profile(geometry_iter, c_profile, burn_value):
     out_dtype = c_profile["dtype"]
     out_raster = rasterize(geom_burn_iter(geometry_iter, burn_value),
                      (c_profile["height"], c_profile["width"]),
-                     fill=0,
+                     fill=background_fill,
                      transform=c_profile["transform"],
                      all_touched=True,
                      #default_value=None,
