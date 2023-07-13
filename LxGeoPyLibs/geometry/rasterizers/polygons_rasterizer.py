@@ -40,3 +40,25 @@ def polygons_to_multiclass(geom_container, bounds, crs, contours_width=5, gsd=0.
     polygon_rasterized = binary_to_multiclass(polygon_rasterized)
     return polygon_rasterized
 
+def polygons_to_multiclass2(gdf, bounds, crs, contours_width=3, gsd=0.5):
+    if isinstance(bounds, pygeos.Geometry):
+        bounds = pygeos.bounds(bounds)
+    elif isinstance(bounds, (list, tuple)):
+        pass
+    else:
+        raise Exception("bounds type unknown!")
+    
+    rasterization_profile = extents_to_profile(bounds, gsd=gsd, crs=crs, count=3, dtype=rio.uint8)
+    if (gdf.empty):
+        proba_map = np.zeros((rasterization_profile["count"], rasterization_profile["height"], rasterization_profile["width"]))
+        proba_map[0]=1
+    else:
+        contour_rasterized = rasterize_from_profile(gdf.geometry.boundary, rasterization_profile, 1)
+        contour_rasterized=morphology.dilation(contour_rasterized, morphology.square(contours_width))
+        polygon_rasterized = rasterize_from_profile(gdf.geometry, rasterization_profile, 1)
+        polygon_rasterized = np.maximum(polygon_rasterized.astype(int)-contour_rasterized.astype(int), 0)
+        background_map = np.maximum( np.ones_like(contour_rasterized).astype(int)-polygon_rasterized.astype(int)-contour_rasterized.astype(int),0 )
+
+        proba_map = np.stack([background_map, polygon_rasterized, contour_rasterized])
+    return proba_map
+
