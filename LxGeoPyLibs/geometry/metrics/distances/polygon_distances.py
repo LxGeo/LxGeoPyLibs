@@ -10,12 +10,12 @@ def multipolygon_option_wrapper(dist_func):
     def wrapped_func(geom1, geom2, **kwargs):
         
         if type(geom1) == MultiPolygon:
-            geoms1 = list(geom1)
+            geoms1 = list(geom1.geoms)
         else:
             geoms1 = [geom1]
 
         if type(geom2) == MultiPolygon:
-            geoms2 = list(geom2)
+            geoms2 = list(geom2.geoms)
         else:
             geoms2 = [geom2]
         
