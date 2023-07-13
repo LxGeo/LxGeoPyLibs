@@ -48,14 +48,16 @@ class PatchifiedDataset(object):
 
 class CallableModel():
 
-    def __init__(self,callable=lambda x:x, bs=1, mps=128):
+    def __init__(self, bs=1, mps=128, functor=None):
         super().__init__()
         self.bs=bs
         self.mps = mps
-        self.forward = callable
-        self.device="cpu"
+        self.functor=functor
+        #self.device="cpu"
 
     def __call__(self, x):
+        if self.functor:
+            return self.functor(x)
         return self.forward(x)
     
     def batch_size(self):
