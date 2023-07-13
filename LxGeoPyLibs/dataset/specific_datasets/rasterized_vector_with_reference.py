@@ -135,8 +135,9 @@ class VectorWithRefDataset(Dataset, PatchifiedDataset):
     def get_stacked_batch(self, input_to_stack):
 
         dezipped = list(zip(*input_to_stack))
-
-        return [ torch.stack(d) for d in dezipped ]
+        out_stacks = [torch.stack(dezipped[0])]
+        out_stacks.extend( [ torch.stack(d) for d in list(zip(*dezipped[1])) ] )
+        return out_stacks
 
     def gsd(self):
         return self.image_dataset.gsd()
