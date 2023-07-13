@@ -8,9 +8,8 @@ def compute_rotation_angle(satAz1, satEl1, satAz2, satEl2):
     """
     Computes rotation angle to be applied on images for epipolar alignment
     """    
-    rot_angle = ( cot(satEl1) * math.cos(satAz1) - math.cos(satAz2) * cot(satEl2) ) / \
-        ( cot(satEl1) * math.sin(satAz1) - math.sin(satAz2) * cot(satEl2) )
-    return math.atan(rot_angle)
+    dx, dy = compute_roof2roof_constants(satAz1, satEl1, satAz2, satEl2)
+    return math.atan2(dy, dx)
 
 def compute_roof2roof_constants(satAz1_r, satEl1_r, satAz2_r, satEl2_r):
     """
