@@ -147,7 +147,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         if self.preprocessing:
             img = self.preprocessing(img)
         
-        img = torch.from_numpy(img).float()
+        img = torch.from_numpy(img.copy()).float()
         
         return img
     
