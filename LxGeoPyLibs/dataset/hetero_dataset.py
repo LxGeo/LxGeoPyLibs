@@ -45,9 +45,28 @@ class HeteroDataset(RasterDataset):
         if not None in (spatial_patch_size, spatial_patch_overlap):
             self.setup_spatial(spatial_patch_size, spatial_patch_overlap, self.bounds_geom)
         
-    
-    def setup_spatial(self, patch_size, patch_overlap, bounds_geom=None):
+    def setup_patch_per_pixel(self, pixel_patch_size, pixel_patch_overlap, bounds_geom):
 
+        spatial_patch_size = (pixel_patch_size[0]*self.gsd(), pixel_patch_size[1]*self.gsd())
+        spatial_patch_overlap = pixel_patch_overlap * self.gsd()
+        self.setup_spatial(spatial_patch_size, spatial_patch_overlap, bounds_geom)
+
+    def setup_spatial(self, patch_size_spatial, patch_overlap_spatial, bounds_geom):
+
+        if not bounds_geom:
+            bounds_geom=self.bounds_geom
+        PatchifiedDataset.__init__(self, patch_size_spatial, patch_overlap_spatial, bounds_geom)
+        for dst in self.sub_datasets.values():
+            dst.setup_patch_per_spatial_unit(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+    
+    def setup_pixel(self, patch_size, patch_overlap, bounds_geom=None):
+        """
+        Setup patch loading settings using spatial coordinates.
+        Args:
+            patch_size: a tuple of positive integers in pixels.
+            patch_overlap: a positive integer in pixels.
+            bounds_geom: pygeos polygon
+        """
         self.patch_size= patch_size
         self.patch_overlap= patch_overlap
         
@@ -55,8 +74,9 @@ class HeteroDataset(RasterDataset):
         if not bounds_geom:
             bounds_geom = self.bounds_geom
 
-        pixel_x_size = self.gsd()
-        pixel_y_size = self.gsd()
+        
+        pixel_x_size = self.raster_interface().rio_dataset().transform[0]
+        pixel_y_size = -self.raster_interface().rio_dataset().transform[4]
 
         patch_size_spatial = (self.patch_size[0]*pixel_x_size, self.patch_size[1]*pixel_y_size)
         patch_overlap_spatial = self.patch_overlap*pixel_x_size
