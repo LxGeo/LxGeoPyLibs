@@ -34,6 +34,8 @@ def polygons_to_multiclass(geom_container, bounds, crs, contours_width=5, gsd=0.
         raise Exception("bounds type unknown!")
     
     rasterization_profile = extents_to_profile(bounds, gsd=gsd, crs=crs, count=3, dtype=rio.uint8)
+    if len(geom_container)==0:
+        return np.zeros((rasterization_profile["count"], rasterization_profile["height"], rasterization_profile["width"]))
     polygon_rasterized = rasterize_from_profile(geom_container, rasterization_profile, 1)
     polygon_rasterized = binary_to_multiclass(polygon_rasterized)
     return polygon_rasterized
