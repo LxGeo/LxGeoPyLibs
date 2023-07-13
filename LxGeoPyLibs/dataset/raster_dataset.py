@@ -53,6 +53,8 @@ class RasterDataset(Dataset, PatchifiedDataset):
         self.patch_overlap = patch_overlap
         
         raster_total_bound_geom = pygeos.box(*self.rio_dataset().bounds)
+        if type(bounds_geom)==str:
+            bounds_geom = pygeos.from_wkt(bounds_geom)
         if bounds_geom:
             assert pygeos.intersects(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
             self.bounds_geom = bounds_geom
