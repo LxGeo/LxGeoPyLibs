@@ -62,3 +62,22 @@ def polygons_to_multiclass2(gdf, bounds, crs, contours_width=3, gsd=0.5):
         proba_map = np.stack([background_map, polygon_rasterized, contour_rasterized])
     return proba_map
 
+def polygonsWA_to_displacment_map(gdf, bounds, crs, gsd=0.5, disp_x_column_name="disp_x",disp_y_column_name="disp_y", weight_column_name="hrel"):
+    """
+    """
+    if isinstance(bounds, pygeos.Geometry):
+        bounds = pygeos.bounds(bounds)
+    elif isinstance(bounds, (list, tuple)):
+        pass
+    else:
+        raise Exception("bounds type unknown!")
+    
+    flow_profile = extents_to_profile(bounds, crs=crs, count=3, dtype=np.float32, gsd=gsd)
+    if gdf.empty:
+        return np.zeros((flow_profile["count"], flow_profile["height"], flow_profile["width"]))
+
+    dispx = rasterize_from_profile(gdf.geometry, flow_profile, gdf[disp_x_column_name].values / gsd)
+    dispy = rasterize_from_profile(gdf.geometry, flow_profile, gdf[disp_y_column_name].values / -gsd)
+    weight = rasterize_from_profile(gdf.geometry, flow_profile, gdf[weight_column_name].values, background_fill=1)
+    weighted_flow = np.stack([dispx, dispy, weight])
+    return weighted_flow
