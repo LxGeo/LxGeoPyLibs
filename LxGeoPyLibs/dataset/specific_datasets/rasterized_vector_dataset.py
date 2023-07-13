@@ -46,4 +46,16 @@ class RasterizedVectorDataset(RasterDataset, PixelizedDataset):
         #return [torch.stack(input_to_stack)]
         return torch.stack(input_to_stack)
     
+from LxGeoPyLibs.dataset.patchified_dataset import CallableModel
+
+if __name__ == "__main__":
+
+    in_vector = "C:/DATA_SANDBOX/Alignment_Project/PerfectGT/Sweden_Stockholm_B_Neo/h_buildings.shp"
+    out_file = "C:/DATA_SANDBOX/Alignment_Project/PerfectGT/Sweden_Stockholm_B_Neo/preds/build_probas.tif"
+    rasterization_method = polygons_to_multiclass2
+    c_r = RasterizedVectorDataset(in_vector, gsd=0.15246,
+                                  rasterization_method=rasterization_method,
+                                  pixel_patch_size=(256,256), pixel_patch_overlap=0)
+    mdl = CallableModel(bs=1, functor=lambda x:x)
+    c_r.predict_to_file(out_file, mdl, post_processing_fn=lambda x:(x))
     
