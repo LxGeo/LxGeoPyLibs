@@ -1,4 +1,4 @@
-
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset
 from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
 import multiprocessing
 import fiona
@@ -8,6 +8,8 @@ from collections.abc import Iterable
 from collections import OrderedDict, defaultdict
 from LxGeoPyLibs.geometry.utils_pygeos import get_pygeos_geom_creator
 import geopandas as gpd
+from pyproj import CRS
+
 
 class VectorRegister(dict):
 
@@ -22,7 +24,7 @@ class VectorRegister(dict):
 vectors_map=VectorRegister()
 lock = multiprocessing.Lock()
 
-class VectorDataset(PatchifiedDataset):
+class VectorDataset(BoundedDataset, PatchifiedDataset):
 
     def __init__(self, vector_path:str, augmentation_transforms=None, preprocessing=None, bounds_geom=None, spatial_patch_size=None, spatial_patch_overlap=None):
 
@@ -35,10 +37,12 @@ class VectorDataset(PatchifiedDataset):
         vector_total_bounds_geom = pygeos.box(*self.fio_dataset().bounds)
         if bounds_geom:
             assert pygeos.intersects(vector_total_bounds_geom, bounds_geom), "Boundary geometry is out of vector extents!"
-            self.bounds_geom = bounds_geom
+            bounds_geom = bounds_geom
         else:
-            self.bounds_geom = vector_total_bounds_geom
+            bounds_geom = vector_total_bounds_geom
         
+        BoundedDataset.__init__(self,bounds_geom)
+
         self.preprocessing=preprocessing
         self.is_setup=False
 
@@ -48,13 +52,16 @@ class VectorDataset(PatchifiedDataset):
             self.augmentation_transforms = augmentation_transforms
 
         if not None in (spatial_patch_size, spatial_patch_overlap):
-            self.setup_spatial(spatial_patch_size, spatial_patch_overlap, self.bounds_geom)
+            self.setup_patch_per_spatial_unit(spatial_patch_size, spatial_patch_overlap, self.bounds_geom)
         
     def fio_dataset(self):
         return vectors_map[self.vector_path]
 
-    def crs(self):
+    def crs_wkt(self):
         return self.fio_dataset().crs["init"]
+    
+    def crs(self):
+        return CRS(self.crs_wkt())
     
     def bounds(self):
         return self.fio_dataset().bounds
@@ -62,7 +69,7 @@ class VectorDataset(PatchifiedDataset):
     def vector_geometry_type(self):
         return self.fio_dataset().meta["schema"]["geometry"]
         
-    def setup_spatial(self, patch_size_spatial, patch_overlap_spatial, bounds_geom):
+    def setup_patch_per_spatial_unit(self, patch_size_spatial, patch_overlap_spatial, bounds_geom):
         """
         Setup patch loading settings using spatial coordinates.
         Args:
@@ -70,7 +77,7 @@ class VectorDataset(PatchifiedDataset):
             patch_overlap: a positive integer in coords metric.
             bounds_geom: pygeos polygon
         """
-        super().__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+        PatchifiedDataset.__init__(self, patch_size_spatial, patch_overlap_spatial, bounds_geom)
     
     def _load_vector_geometries_window(self, window_geom, crop=False):
         """
