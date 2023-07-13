@@ -15,7 +15,7 @@ class PatchifiedDataset(object):
     
     """
 
-    def __init__(self, spatial_patch_size, spatial_patch_overlap, bounds_geom):
+    def __init__(self, spatial_patch_size, spatial_patch_overlap, bounds_geom, crs=None):
         super().__init__()
 
         """
@@ -45,12 +45,6 @@ class PatchifiedDataset(object):
     def __getitem__(self, index):
         return self.patch_grid[index]
     
-    def gsd(self):
-        raise NotImplementedError
-
-    def get_stacked_batch(self, input_to_stack:[Any]):
-        raise NotImplementedError
-
 
 class CallableModel():
 
