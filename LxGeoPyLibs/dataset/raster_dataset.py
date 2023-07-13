@@ -56,7 +56,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         if type(bounds_geom)==str:
             bounds_geom = pygeos.from_wkt(bounds_geom)
         if bounds_geom:
-            assert pygeos.intersects(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
+            assert pygeos.contains(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
             self.bounds_geom = bounds_geom
         else:
             self.bounds_geom = raster_total_bound_geom
