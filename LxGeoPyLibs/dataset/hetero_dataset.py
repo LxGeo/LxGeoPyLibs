@@ -10,8 +10,13 @@ import torch
 
 class HeteroDataset(RasterDataset):
 
-    def __init__(self, sub_datasets_init : typing.OrderedDict[str, dict], spatial_patch_size=None, spatial_patch_overlap=None, bounds_geom=None):
+    def __init__(self, sub_datasets_init : typing.OrderedDict[str, dict],augmentation_transforms=None, spatial_patch_size=None, spatial_patch_overlap=None, bounds_geom=None):
         
+        if augmentation_transforms is None:
+            self.augmentation_transforms=[Trans_Identity()]
+        else:
+            self.augmentation_transforms = augmentation_transforms
+
         self._raster_interface = None
         self.sub_datasets = OrderedDict()
         for dst_id, dst_definition in sub_datasets_init.items():
