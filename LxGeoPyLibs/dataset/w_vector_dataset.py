@@ -16,6 +16,7 @@ class WVectorDataset(object):
 
         assert (mode != WriteMode.new) or not os.path.exists(vector_path), "WVectorDataset with mode 'new' for existing path !"
         self.vector_path = vector_path
+        self.crs=crs
         
         self.saved_ids = set()
 
@@ -33,5 +34,5 @@ class WVectorDataset(object):
         features_gdf.drop(features_gdf[features_gdf["id"].isin(self.saved_ids)].index, inplace=True)
         if not features_gdf.empty:
             self.saved_ids.update(features_gdf["id"].values)
-            features_gdf.drop('id', axis=1).to_file(self.vector_path, mode=self.c_write_mode)
+            features_gdf.drop('id', axis=1).to_file(self.vector_path, mode=self.c_write_mode, crs=self.crs)
             self.c_write_mode="a"
