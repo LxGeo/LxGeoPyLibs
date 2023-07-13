@@ -87,26 +87,58 @@ class Trans_fliplr(Image_Transformation):
         return self.__fwd__(*args)
     
 class Trans_gaussian_noise(Image_Transformation):
-    def __call__(self, image1, gt1):
-        noise = np.random.normal(loc = 0.0, scale = 2, size = image1.shape) 
-        image1_t = np.clip(image1+noise, 0 ,255).astype(image1.dtype)
-        return (image1_t, gt1)
+    
+    def __init__(self, loc=0.0, scale=2, min_val=0, max_val=255, apply_all=False):
+        self.loc = loc
+        self.scale = scale
+        self.min_val = min_val
+        self.max_val = max_val
+        self.apply_all = apply_all
+    
+    def __call__(self, image1, gt1=None):
+        noise = np.random.normal(loc = self.loc, scale = self.scale, size = image1.shape) 
+        image1_t = np.clip(image1+noise, self.min_val ,self.max_val)#.type(image1.type())
+        if self.apply_all:
+            gt1_t = np.clip(gt1+noise, self.min_val ,self.max_val)
+        else:
+            gt1_t = gt1
+        return (image1_t, gt1_t)
 
 class Trans_gamma_adjust(Image_Transformation):    
-    def __init__(self, gamma=1.5):
+    def __init__(self, gamma=1.5, apply_all=False):
         self.gamma = gamma
+        self.apply_all = apply_all
         
     def __call__(self, image1, gt1):
-        image1_t = exposure.adjust_gamma(image1/255, self.gamma)*255        
-        return (image1_t, gt1)
+        image1_t = exposure.adjust_gamma(image1/255, self.gamma)*255
+        if self.apply_all:
+            gt1_t = exposure.adjust_gamma(gt1/255, self.gamma)*255
+        else:
+            gt1_t = gt1
+        return (image1_t, gt1_t)
 
-class Trans_equal_hist(Image_Transformation):    
+class Trans_equal_hist(Image_Transformation):   
+    def __init__(self, apply_all=False):
+        self.apply_all = apply_all
+         
     def __call__(self, image1, gt1):
         image1_t = (exposure.equalize_hist(image1)*255).astype(image1.dtype)
-        return (image1_t, gt1)
+        if self.apply_all:
+            gt1_t = (exposure.equalize_hist(gt1)*255).astype(gt1.dtype)
+        else:
+            gt1_t = gt1
+        return (image1_t, gt1_t)
 
-class Trans_contrast_stretch(Image_Transformation):    
+class Trans_contrast_stretch(Image_Transformation):
+    def __init__(self, apply_all=False):
+        self.apply_all = apply_all
+        
     def __call__(self, image1, gt1):
         p2, p98 = np.percentile(image1, (2, 98))
         image1_t = exposure.rescale_intensity(image1, in_range=(p2, p98))*255
-        return (image1_t, gt1)
+        if self.apply_all:
+            p2, p98 = np.percentile(gt1, (2, 98))
+            gt1_t = exposure.rescale_intensity(gt1, in_range=(p2, p98))*255
+        else:
+            gt1_t = gt1
+        return (image1_t, gt1_t)
