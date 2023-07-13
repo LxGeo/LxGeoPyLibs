@@ -35,7 +35,7 @@ class PatchifiedDataset(object):
         grid_step = self.spatial_patch_size[0]-self.spatial_patch_overlap*2, self.spatial_patch_size[1]-self.spatial_patch_overlap*2
         assert grid_step[0]>0 and grid_step[1]>0 , "Spatial patch overlap is high! Reduce patch overlap."
         self.patch_grid = make_grid(buff_bounds_geom, grid_step[0], grid_step[1], self.spatial_patch_size[0], self.spatial_patch_size[1],
-                                    filter_predicate = lambda x: pygeos.intersects(x, bounds_geom) )
+                                    filter_predicate = lambda x: pygeos.intersects(pygeos.envelope(x), bounds_geom) )
         
         self.is_setup=True
     
