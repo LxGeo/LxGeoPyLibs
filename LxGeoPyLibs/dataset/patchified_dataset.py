@@ -9,7 +9,6 @@ import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from typing import Any
-from LxGeoPyLibs.satellites.transformation.rotations_fusion import reversed_bands_cummulation
 
 def window_round(in_window):
     return rio.windows.Window(round(in_window.col_off),round(in_window.row_off),
@@ -56,7 +55,7 @@ class PatchifiedDataset(object):
     def get_stacked_batch(self, input_to_stack:[Any]):
         raise NotImplementedError
 
-    def predict_to_file(self, out_file, model, tile_size=(256,256), post_processing_fn=lambda x:x, augmentations=None ):
+    def predict_to_file(self, out_file, model, tile_size=(256,256), post_processing_fn=lambda x:x, augmentations=None, fusion_fn=lambda x:np.mean(x,axis=0) ):
         """
         Runs prediction and postprocessing if provided using prediction model and save to raster.
         Args:
@@ -92,7 +91,8 @@ class PatchifiedDataset(object):
         with torch.no_grad():
             sample_output = post_processing_fn(model.predict_step( sample_input ))
             if type(sample_output) == torch.Tensor:
-                sample_output = sample_output.cpu().numpy()
+                sample_output = sample_output.cpu().numpy()            
+            sample_output = fusion_fn(sample_output)
         out_band_count=sample_output.shape[-3]
 
         out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
@@ -109,8 +109,7 @@ class PatchifiedDataset(object):
                     Function to combine prediction of a single augmented patch and crop extra pixels using overlap value and finally save to dataset
                     """
                     tile_idx, prediction_list = item
-                    #mean_patch_pred = torch.stack(prediction_list).mean(dim=0)
-                    fusion_fn = lambda x: reversed_bands_cummulation(x.max(0), max_val=1, bands_priority=[1,2,0])
+                    #mean_patch_pred = torch.stack(prediction_list).mean(dim=0)                    
                     mean_patch_pred = fusion_fn(np.stack(prediction_list, axis=0))
 
                     c_patch_geom = self.patch_grid[tile_idx]
@@ -170,7 +169,7 @@ class PatchifiedDataset(object):
                         process_per_batch(to_predict_queue)
                 
                 # finish last cached items
-                if to_predict_queue: process_per_batch(to_predict_queue)
+                while to_predict_queue: process_per_batch(to_predict_queue)
                 for _ in range(len(tile_pred_cache)): tile_pred_cache.popitem()
 
 
