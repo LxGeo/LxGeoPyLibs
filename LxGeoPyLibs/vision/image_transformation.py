@@ -10,7 +10,7 @@ from skimage import exposure
 import numpy as np
 import torch
 
-rot90_fn = lambda x, times: np.rot90(x, k=times, axes=(1, 2))
+rot90_fn = lambda x, times: np.rot90(x, k=times, axes=(1, 2)) if isinstance(x, np.ndarray) else torch.rot90(x, k=times, dims=(1, 2)) 
 
 class Image_Transformation:
     
