@@ -8,10 +8,12 @@ from torch.utils.data import Dataset
 from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
 from LxGeoPyLibs.geometry.grid import make_grid
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset, PixelizedDataset
 from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
 import pygeos
 import tqdm
-from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
+from LxGeoPyLibs.geometry.utils_rio import extents_to_profile, window_round
+from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 
 class RasterRegister(dict):
 
@@ -26,84 +28,58 @@ class RasterRegister(dict):
 rasters_map=RasterRegister()
 lock = multiprocessing.Lock()
 
-class RasterDataset(Dataset, PatchifiedDataset):
+
+class RasterDataset(BoundedDataset, PixelizedDataset):
     
     READ_RETRY_COUNT = 4
     DEFAULT_PATCH_SIZE = (256,256)
     DEFAULT_PATCH_OVERLAP = 100
 
-    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, patch_size=None, patch_overlap=None):
+    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, pixel_patch_size=None, pixel_patch_overlap=None):
                         
         assert os.path.isfile(image_path), f"Can't find raster in {image_path}"
         
         self.image_path=image_path
 
-        if augmentation_transforms is None:
-            self.augmentation_transforms=[Trans_Identity()]
-        else:
-            self.augmentation_transforms = augmentation_transforms
-        
         rasters_map.update({
             self.image_path: rio.open(self.image_path)
             })
-        
-        self.Y_size, self.X_size = self.rio_dataset().shape
-             
-        self.patch_size = patch_size
-        self.patch_overlap = patch_overlap
-        
         raster_total_bound_geom = pygeos.box(*self.rio_dataset().bounds)
         if bounds_geom:
             assert pygeos.intersects(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
-            self.bounds_geom = bounds_geom
+            bounds_geom = bounds_geom
         else:
-            self.bounds_geom = raster_total_bound_geom
+            bounds_geom = raster_total_bound_geom
+        
+        BoundedDataset.__init__(self, bounds_geom)
+        PixelizedDataset.__init__(self, self.rio_dataset().transform[0], -self.rio_dataset().transform[4])
 
+        if augmentation_transforms is None:
+            self.augmentation_transforms=[Trans_Identity()]
+        else:
+            self.augmentation_transforms = augmentation_transforms        
+        
+        self.Y_size, self.X_size = self.rio_dataset().shape
+        
         self.preprocessing=preprocessing
         self.is_setup=False
-        if not None in (patch_size, patch_overlap):
-            self.setup_spatial(patch_size, patch_overlap, self.bounds_geom)
+        if not None in (pixel_patch_size, pixel_patch_overlap):
+            self.setup_patch_per_pixel(pixel_patch_size, pixel_patch_overlap, self.bounds_geom)
     
     def rio_dataset(self):
         return rasters_map[self.image_path]
     
-    ### should be fixed to meters not pixels
-    def setup_pixel(self, patch_size, patch_overlap, bounds_geom=None):
+    def setup_patch_per_spatial_unit(self, patch_size_spatial, patch_overlap_spatial, bounds_geom):
         """
         Setup patch loading settings using spatial coordinates.
         Args:
-            patch_size: a tuple of positive integers in pixels.
-            patch_overlap: a positive integer in pixels.
+            patch_size_spatial: a tuple of positive integers in coords metric.
+            patch_size_spatial: a positive integer in coords metric.
             bounds_geom: pygeos polygon
         """
-        self.patch_size= patch_size
-        self.patch_overlap= patch_overlap
-        
-        # If no bounds provided, use image bounds
-        if not bounds_geom:
-            bounds_geom = self.bounds_geom
-
-        pixel_x_size = self.rio_dataset().transform[0]
-        pixel_y_size = -self.rio_dataset().transform[4]
-
-        patch_size_spatial = (self.patch_size[0]*pixel_x_size, self.patch_size[1]*pixel_y_size)
-        patch_overlap_spatial = self.patch_overlap*pixel_x_size
-
-        super(Dataset, self).__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
-    
-    def setup_spatial(self, patch_size_spatial, patch_overlap_spatial, bounds_geom=None):
-        """
-        Setup patch loading settings using spatial coordinates.
-        Args:
-            patch_size: a tuple of positive integers in coords metric.
-            patch_overlap: a positive integer in coords metric.
-            bounds_geom: pygeos polygon
-        """
-        if not bounds_geom:
-            bounds_geom = self.bounds_geom
-        self.patch_size= (int(patch_size_spatial[0]/self.gsd()), int(patch_size_spatial[1]/self.gsd() ))
-        self.patch_overlap= int(patch_overlap_spatial/self.gsd())
-        super().__init__(patch_size_spatial, patch_overlap_spatial, bounds_geom)
+        patch_size= (int(patch_size_spatial[0]/self.gsd()), int(patch_size_spatial[1]/self.gsd() ))
+        patch_overlap= int(patch_overlap_spatial/self.gsd())
+        self.setup_patch_per_pixel(patch_size, patch_overlap, bounds_geom)
 
     def gsd(self):
         return abs(self.rio_dataset().transform[0])
@@ -116,7 +92,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
 
     def __len__(self):
         assert self.is_setup, "Dataset is not set up!"
-        return super(Dataset, self).__len__()*len(self.augmentation_transforms)
+        return super(BoundedDataset, self).__len__()*len(self.augmentation_transforms)
     
     @lru_cache
     def _load_padded_raster_window(self, window_geom, patch_size=None):
@@ -136,7 +112,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         lock.release()
         
         if not patch_size:
-            patch_size = self.patch_size
+            patch_size = self.pixel_patch_size
         assert patch_size, "Patch size is not set for loading padded windows!"
         ## padding check
         left_pad = int(-min(0, c_window.col_off))
@@ -155,7 +131,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
         window_idx = idx // (len(self.augmentation_transforms))
         transform_idx = idx % (len(self.augmentation_transforms))
         
-        window_geom = super(Dataset, self).__getitem__(window_idx)
+        window_geom = PatchifiedDataset.__getitem__(self, window_idx)
         
         img = self._load_padded_raster_window(window_geom)
         
@@ -170,6 +146,9 @@ class RasterDataset(Dataset, PatchifiedDataset):
         return img
     
     def get_stacked_batch(self, input_to_stack):
+        #return [torch.stack(input_to_stack)]
+        return torch.stack(input_to_stack)
+    
     def predict_to_file(self, out_file, model, tile_size=(256,256), post_processing_fn=lambda x:x, augmentations=None ):
         """
         Runs prediction and postprocessing if provided using prediction model and save to raster.
@@ -285,7 +264,7 @@ class RasterDataset(Dataset, PatchifiedDataset):
                 if to_predict_queue: process_per_batch(to_predict_queue)
                 for _ in range(len(tile_pred_cache)): tile_pred_cache.popitem()
 
-    
+
 from LxGeoPyLibs.dataset.patchified_dataset import CallableModel
 if __name__ == "__main__":
 
