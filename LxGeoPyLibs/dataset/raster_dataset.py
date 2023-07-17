@@ -8,12 +8,13 @@ from torch.utils.data import Dataset
 from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
 from LxGeoPyLibs.geometry.grid import make_grid
-from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset, PixelizedDataset
-from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset
+from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset, PixelPatchifiedDataset
 import pygeos
 import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile, window_round
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
+from LxGeoPyLibs.ppattern.exceptions import MissingFileException
 
 class RasterRegister(dict):
 
@@ -29,7 +30,7 @@ rasters_map=RasterRegister()
 lock = multiprocessing.Lock()
 
 
-class RasterDataset(BoundedDataset, PixelizedDataset):
+class RasterDataset(PixelPatchifiedDataset):
     
     READ_RETRY_COUNT = 4
     DEFAULT_PATCH_SIZE = (256,256)
@@ -37,7 +38,8 @@ class RasterDataset(BoundedDataset, PixelizedDataset):
 
     def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, pixel_patch_size=None, pixel_patch_overlap=None):
                         
-        assert os.path.isfile(image_path), f"Can't find raster in {image_path}"
+        if not os.path.isfile(image_path):
+            raise MissingFileException(image_path)
         
         self.image_path=image_path
 
@@ -51,8 +53,8 @@ class RasterDataset(BoundedDataset, PixelizedDataset):
         else:
             bounds_geom = raster_total_bound_geom
         
-        BoundedDataset.__init__(self, bounds_geom)
-        PixelizedDataset.__init__(self, self.rio_dataset().transform[0], -self.rio_dataset().transform[4])
+        BoundedDataset.__init__(self, bounds_geom, rasters_map[self.image_path].crs)
+        PixelPatchifiedDataset.__init__(self, self.rio_dataset().transform[0], -self.rio_dataset().transform[4])
 
         if augmentation_transforms is None:
             self.augmentation_transforms=[Trans_Identity()]
@@ -83,10 +85,7 @@ class RasterDataset(BoundedDataset, PixelizedDataset):
 
     def gsd(self):
         return abs(self.rio_dataset().transform[0])
-    
-    def crs(self):
-        return self.rio_dataset().crs
-    
+        
     def bounds(self):
         return self.rio_dataset().bounds
 
@@ -190,7 +189,7 @@ class RasterDataset(BoundedDataset, PixelizedDataset):
         out_band_count=sample_output.shape[-3]
 
         out_profile = extents_to_profile(pygeos.bounds(self.bounds_geom), gsd = self.gsd())
-        out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1], "crs":self.crs()})
+        out_profile.update({"count": out_band_count, "dtype":sample_output.dtype, "tiled": True, "blockxsize":tile_size[0],"blockysize":tile_size[1], "crs":self.crs})
         
         with rio.open(out_file, "w", **out_profile) as target_dst:
             
