@@ -9,14 +9,16 @@ import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from typing import Any
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset
+import geopandas as gpd
 
-class PatchifiedDataset(object):
+class PatchifiedDataset(BoundedDataset):
     """
     
     """
 
     def __init__(self, spatial_patch_size, spatial_patch_overlap, bounds_geom, crs=None):
-        super().__init__()
+        super().__init__(bounds_geom)
 
         """
         Setup patch loading settings using spatial coordinates.
@@ -25,6 +27,12 @@ class PatchifiedDataset(object):
             patch_overlap: a positive integer in spatial metric.
             bounds_geom: pygeos polygon
         """
+        
+        BoundedDataset.__init__(self, bounds_geom, crs)
+        
+        # TODO fix following line (it's not totally correct)
+        if type(spatial_patch_overlap) in (tuple, list):
+           spatial_patch_overlap = spatial_patch_overlap[0] 
 
         self.spatial_patch_size = spatial_patch_size
         self.spatial_patch_overlap = spatial_patch_overlap
