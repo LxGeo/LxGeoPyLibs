@@ -53,6 +53,9 @@ class PatchifiedDataset(BoundedDataset):
     def __getitem__(self, index):
         return self.patch_grid[index]
     
+    def patches_gdf(self):
+        return gpd.GeoDataFrame(geometry=self.patch_grid, crs=self.crs)
+
 
 class CallableModel():
 
