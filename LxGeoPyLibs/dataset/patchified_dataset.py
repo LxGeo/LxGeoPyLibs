@@ -36,7 +36,6 @@ class PatchifiedDataset(BoundedDataset):
 
         self.spatial_patch_size = spatial_patch_size
         self.spatial_patch_overlap = spatial_patch_overlap
-        self.bounds_geom = bounds_geom
         # buffer bounds_geom to include out of bound area
         buff_bounds_geom = pygeos.buffer(bounds_geom, self.spatial_patch_overlap, cap_style="square", join_style="mitre")
 
@@ -56,6 +55,29 @@ class PatchifiedDataset(BoundedDataset):
     def patches_gdf(self):
         return gpd.GeoDataFrame(geometry=self.patch_grid, crs=self.crs)
 
+
+class PixelPatchifiedDataset(PatchifiedDataset):
+
+    def __init__(self, pixel_x_size, pixel_y_size):
+        self.pixel_x_size=pixel_x_size
+        self.pixel_y_size=pixel_y_size
+
+    ### should be fixed to meters not pixels
+    def setup_patch_per_pixel(self, pixel_patch_size, pixel_patch_overlap, bounds_geom):
+        """
+        Setup patch loading settings using spatial coordinates.
+        Args:
+            patch_size: a tuple of positive integers in pixels.
+            patch_overlap: a positive integer in pixels.
+            bounds_geom: pygeos polygon
+        """
+        self.pixel_patch_size= pixel_patch_size
+        self.pixel_patch_overlap= pixel_patch_overlap
+
+        patch_size_spatial = (self.pixel_patch_size[0]*self.pixel_x_size, self.pixel_patch_size[1]*self.pixel_y_size)
+        patch_overlap_spatial = self.pixel_patch_overlap*self.pixel_x_size
+
+        PatchifiedDataset.__init__(self, patch_size_spatial, patch_overlap_spatial, bounds_geom)
 
 class CallableModel():
 
