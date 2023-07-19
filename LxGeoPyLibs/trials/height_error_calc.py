@@ -1,4 +1,5 @@
 from LxGeoPyLibs.dataset.vector_dataset import VectorDataset
+from LxGeoPyLibs.dataset.w_vector_dataset import WVectorDataset, WriteMode
 import typing
 import tqdm
 import geopandas as gpd
@@ -84,18 +85,21 @@ def compute_height_error(ref_vector_path, aligned_vector_path, ref_height_column
         height_error.append( c_comp_error )
     return"""
 
-def compute_height_error_sep(ref_vector_path, aligned_vector_path, ref_height_column, tar_height_column):
+def compute_height_error_sep(ref_vector_path, aligned_vector_path, out_vector, ref_height_column, tar_height_column, height_bins):
     
+    err_column_name = "h_err"
     saved_ids = set()
     ref_dst = VectorDataset(ref_vector_path, spatial_patch_size=(512,512), spatial_patch_overlap=0)
     tar_dst = VectorDataset(aligned_vector_path)
+    out_dst = WVectorDataset(out_vector, crs=ref_dst.crs(), mode=WriteMode.overwrite)
+
     ref_height = []
     error = []
     for c_window in tqdm.tqdm(ref_dst.patch_grid):
 
-        ref_view = ref_dst._load_vector_features_window(c_window, ex_fields=[tar_height_column])
+        ref_view = ref_dst._load_vector_features_window(c_window, ex_fields=[tar_height_column, "id"])
         ref_view.drop(ref_view[ref_view["id"].isin(saved_ids)].index, inplace=True)
-        tar_view = tar_dst._load_vector_features_window(c_window, ex_fields=[ref_height_column])
+        tar_view = tar_dst._load_vector_features_window(c_window, ex_fields=[ref_height_column, "id"])
         if ref_view.empty or tar_view.empty:
             continue
         
@@ -107,28 +111,33 @@ def compute_height_error_sep(ref_vector_path, aligned_vector_path, ref_height_co
         inter_gdf["IOU"] = inter_gdf.area / (inter_gdf["area_1"]+inter_gdf["area_2"]-inter_gdf.area)
 
         err_df=inter_gdf.groupby("id_1").apply(lambda rows: (abs(rows[ref_height_column]-rows[tar_height_column])*rows["IOU"]).sum()/rows["IOU"].sum() )
-        ref_view=ref_view.join(err_df.rename("err"), on="id").dropna()
+        ref_view=ref_view.join(err_df.rename(err_column_name), on="id")#.dropna()
+        ref_view.loc[ref_view[ref_height_column].isna(), err_column_name] = None # keep nan assigned heights to nan
 
-        error.extend(ref_view.err.values.tolist())
+        out_dst.add_feature(ref_view.drop(["area"], axis=1))
+
+        error.extend(ref_view[err_column_name].values.tolist())
         ref_height.extend(ref_view[ref_height_column].values.tolist())
         
         saved_ids.update(ref_view.id.values)
 
     df=pd.DataFrame({"ref_height":ref_height, "error":error})
     print("overall: " + str(df.error.mean()))
-    print("[0,10]: " + str(df[df.ref_height<=10].error.mean()))
-    print("[10,20]: " + str(df[(df.ref_height>10) & (df.ref_height<=20)].error.mean()))
-    print("[20,50]: " + str(df[(df.ref_height>20) & (df.ref_height<=50)].error.mean()))
-    print("[50,inf]: " + str(df[(df.ref_height>50)].error.mean()))
+    for c_bin_idx in range(len(height_bins)-1):
+        min_val = height_bins[c_bin_idx]
+        max_val = height_bins[c_bin_idx+1]
+        sub_df = df[(df.ref_height>min_val) & (df.ref_height<=max_val)]
+        print(f"[{min_val},{max_val}]: count({len(sub_df)}): " + str(sub_df.error.mean()))
     pass
 
 if __name__ == "__main__":
     
-    in_vector1 = "/mnt/disk3/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/paris_tristereo_dhm_plus_external/gt_buildings/Buildings.shp"
-    h_col_name1 = "AGL"
-    in_vector2 = "/mnt/disk3/mcherif/Documents/DATA_SANDBOX/Alignment_Project/DATA_SANDBOX/paris_tristereo_dhm_plus_external/alignment2/approach3/PHR1A_acq20180326_del736ec042/aligned.shp"
+    out_vector = "C:/DATA_SANDBOX/Alignment_Project/sgbm_pipeline/perfect_gt_brazil/height_assesment_DL/Brazil_Vila_Velha_B_GT_map_error.shp"
+    in_vector1 = "C:/DATA_SANDBOX/Alignment_Project/PerfectGT/Brazil_Vila_Velha_B_Neo/preds/h_build_poly.shp"
+    h_col_name1 = "h_mean"
+    in_vector2 = "C:/DATA_SANDBOX/Alignment_Project/sgbm_pipeline/perfect_gt_brazil/height_assesment/Brazil_Vila_Velha_B_GT_map_error.shp"
     h_col_name2 = "al_height"
-    height_bins = [10, 20, 50]
-    compute_height_error_sep(in_vector1, in_vector2, h_col_name1, h_col_name2)
+    height_bins = [0, 5, 10, 20, 50, 100]
+    compute_height_error_sep(in_vector1, in_vector2, out_vector, h_col_name1, h_col_name2, height_bins)
     pass
     
