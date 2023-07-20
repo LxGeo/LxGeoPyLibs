@@ -69,6 +69,8 @@ class RasterDataset(PixelPatchifiedDataset):
             self.setup_patch_per_pixel(pixel_patch_size, pixel_patch_overlap, self.bounds_geom)
     
     def rio_dataset(self):
+        if not self.image_path in rasters_map:
+            rasters_map[self.image_path] = rio.open(self.image_path)
         return rasters_map[self.image_path]
     
     def setup_patch_per_spatial_unit(self, patch_size_spatial, patch_overlap_spatial, bounds_geom):
