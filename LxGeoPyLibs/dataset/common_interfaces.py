@@ -1,5 +1,6 @@
 from torch.utils.data import Dataset
 from functools import cached_property
+import copy
 
 class SpatialyProjectedDataset(object):
     def __init__(self, crs):
@@ -23,8 +24,11 @@ class Pixelized2DDataset(object):
 class PreProcessedDataset(object):
     
     def __init__(self, parent_dataset ,preprocessing_callable):
-        self.parent_dataset=parent_dataset
+        self.parent_dataset=copy.copy(parent_dataset)
         self.preprocessing_callable = preprocessing_callable
+    
+    def __len__(self):
+        return len(self.parent_dataset)
     
     def __getitem__(self, index):
         parent_item = self.parent_dataset.__getitem__(index)
@@ -33,7 +37,7 @@ class PreProcessedDataset(object):
 class AugmentedDataset(object):
     
     def __init__(self, wrapped_dataset, augmentations):
-        self.wrapped_dataset = wrapped_dataset
+        self.wrapped_dataset = copy.copy(wrapped_dataset)
         self.augmentations = augmentations
     
     def __len__(self):
