@@ -15,6 +15,7 @@ import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile, window_round
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from LxGeoPyLibs.ppattern.exceptions import MissingFileException
+from LxGeoPyLibs import _logger
 
 class RasterRegister(dict):
 
@@ -27,7 +28,6 @@ class RasterRegister(dict):
             v.close()
 
 rasters_map=RasterRegister()
-lock = multiprocessing.Lock()
 
 
 class RasterDataset(PixelPatchifiedDataset):
@@ -42,6 +42,7 @@ class RasterDataset(PixelPatchifiedDataset):
             raise MissingFileException(image_path)
         
         self.image_path=image_path
+        self.locker = multiprocessing.Lock()
 
         rasters_map.update({
             self.image_path: rio.open(self.image_path)
@@ -103,14 +104,15 @@ class RasterDataset(PixelPatchifiedDataset):
 
         c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform).round_offsets()
         
-        lock.acquire()
         for _ in range(self.READ_RETRY_COUNT):
+            self.locker.acquire()
             try:
                 img = self.rio_dataset().read(window=c_window)
+                self.locker.release()
                 break
             except rio.errors.RasterioIOError as e:
-                lock.release()
-        lock.release()
+                _logger.warn(f"Error reading window from rasterio dataset of raster at {self.image_path}")
+                raise(e)
         
         if not patch_size:
             patch_size = self.pixel_patch_size
