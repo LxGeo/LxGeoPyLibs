@@ -21,10 +21,21 @@ class Pixelized2DDataset(object):
         self.x_pixel_size=x_pixel_size
         self.y_pixel_size=y_pixel_size
 
-class PreProcessedDataset(object):
+class CompositionDataset(object):
+
+    def __init__(self, parent_dataset, copy_parent=True):
+        self.parent_dataset = copy.copy(parent_dataset) if copy_parent else parent_dataset
+    
+    def get_top_dataset(self):
+        if not isinstance(self.parent_dataset, CompositionDataset):
+            return self.parent_dataset
+        else:
+            return self.parent_dataset.get_top_dataset()
+
+class PreProcessedDataset(CompositionDataset):
     
     def __init__(self, parent_dataset ,preprocessing_callable):
-        self.parent_dataset=copy.copy(parent_dataset)
+        CompositionDataset.__init__(self, parent_dataset)
         self.preprocessing_callable = preprocessing_callable
     
     def __len__(self):
@@ -34,20 +45,20 @@ class PreProcessedDataset(object):
         parent_item = self.parent_dataset.__getitem__(index)
         return self.preprocessing_callable(parent_item)
 
-class AugmentedDataset(object):
+class AugmentedDataset(CompositionDataset):
     
-    def __init__(self, wrapped_dataset, augmentations):
-        self.wrapped_dataset = copy.copy(wrapped_dataset)
+    def __init__(self, parent_dataset, augmentations):
+        CompositionDataset.__init__(self, parent_dataset)
         self.augmentations = augmentations
     
     def __len__(self):
-        return len(self.wrapped_dataset) * len(self.augmentations)
+        return len(self.parent_dataset) * len(self.augmentations)
     
     def __getitem__(self, idx):        
         parent_item_idx = idx // (len(self.augmentations))
         c_augmentation_idx = idx % (len(self.augmentations))
         c_augmentation = self.augmentations[c_augmentation_idx]
         
-        parent_item = self.wrapped_dataset[parent_item_idx]
+        parent_item = self.parent_dataset[parent_item_idx]
         return c_augmentation(parent_item)
         
