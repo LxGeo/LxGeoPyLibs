@@ -59,10 +59,13 @@ class MultipleItemRevrsibleTransformation(GeneralRevrsibleTransformation):
     
 
 class TransIdentity(GeneralRevrsibleTransformation):
-     def __init__(self):
+    def identity(x):
+        return x
+    
+    def __init__(self):        
         GeneralRevrsibleTransformation.__init__(self,
-            fwdfn=lambda x:x,
-            rwdfn=lambda x:x,
+            fwdfn=TransIdentity.identity,
+            rwdfn=TransIdentity.identity,
         )
     
 class AlongPlaneTransformation:
