@@ -104,15 +104,17 @@ class RasterDataset(PixelPatchifiedDataset):
 
         c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform).round_offsets()
         
+        img=None
         for _ in range(self.READ_RETRY_COUNT):
-            self.locker.acquire()
-            try:
-                img = self.rio_dataset().read(window=c_window)
-                self.locker.release()
-                break
-            except rio.errors.RasterioIOError as e:
-                _logger.warn(f"Error reading window from rasterio dataset of raster at {self.image_path}")
-                raise(e)
+            with self.locker:
+                try:
+                    img = self.rio_dataset().read(window=c_window)
+                    break
+                except rio.errors.RasterioIOError as e:
+                    _logger.warn(f"Error reading window from rasterio dataset of raster at {self.image_path}")
+        
+        if img is None:
+            raise(Exception(f"Error loading image after {self.READ_RETRY_COUNT} trials!"))
         
         if not patch_size:
             patch_size = self.pixel_patch_size
