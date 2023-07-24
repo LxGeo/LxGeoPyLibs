@@ -1,7 +1,8 @@
-from functools import lru_cache
+from functools import lru_cache, cached_property
 import os
 import math
 import rasterio as rio
+import rasterio.transform
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -47,27 +48,33 @@ class RasterDataset(PixelPatchifiedDataset):
         rasters_map.update({
             self.image_path: rio.open(self.image_path)
             })
-        raster_total_bound_geom = pygeos.box(*self.rio_dataset().bounds)
+        raster_total_bound_geom = pygeos.box(*self.bounds)
         if bounds_geom:
             assert pygeos.intersects(raster_total_bound_geom, bounds_geom), "Boundary geometry is out of raster extents!"
             bounds_geom = bounds_geom
         else:
             bounds_geom = raster_total_bound_geom
         
-        BoundedDataset.__init__(self, bounds_geom, rasters_map[self.image_path].crs)
-        PixelPatchifiedDataset.__init__(self, self.rio_dataset().transform[0], -self.rio_dataset().transform[4])
+        BoundedDataset.__init__(self, bounds_geom, self.rio_profile["crs"])
+        PixelPatchifiedDataset.__init__(self, self.rio_profile["transform"][0], -self.rio_profile["transform"][4])
 
         if augmentation_transforms is None:
             self.augmentation_transforms=[Trans_Identity()]
         else:
             self.augmentation_transforms = augmentation_transforms        
         
-        self.Y_size, self.X_size = self.rio_dataset().shape
+        self.Y_size, self.X_size = self.rio_profile["height"], self.rio_profile["width"] ## Check if correct (HW or WH)
         
         self.preprocessing=preprocessing
         self.is_setup=False
         if not None in (pixel_patch_size, pixel_patch_overlap):
             self.setup_patch_per_pixel(pixel_patch_size, pixel_patch_overlap, self.bounds_geom)
+    
+    @cached_property
+    def rio_profile(self):
+        with rio.open(self.image_path) as dst:
+            profile = dst.profile
+        return profile        
     
     def rio_dataset(self):
         if not self.image_path in rasters_map:
@@ -86,11 +93,13 @@ class RasterDataset(PixelPatchifiedDataset):
         patch_overlap= int(patch_overlap_spatial/self.gsd())
         self.setup_patch_per_pixel(patch_size, patch_overlap, bounds_geom)
 
+    @cached_property
     def gsd(self):
-        return abs(self.rio_dataset().transform[0])
-        
+        return abs(self.rio_profile["transform"][0])
+    
+    @cached_property
     def bounds(self):
-        return self.rio_dataset().bounds
+        return rasterio.transform.array_bounds(self.rio_profile["height"], self.rio_profile["width"], self.rio_profile["transform"])
 
     def __len__(self):
         assert self.is_setup, "Dataset is not set up!"
@@ -102,7 +111,7 @@ class RasterDataset(PixelPatchifiedDataset):
         Function to load image data by window and applying respective padding if requiered.
         """
 
-        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_dataset().transform).round_offsets()
+        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_profile["transform"]).round_offsets()
         
         img=None
         for _ in range(self.READ_RETRY_COUNT):
