@@ -20,6 +20,14 @@ class Pixelized2DDataset(object):
     def __init__(self, x_pixel_size, y_pixel_size):
         self.x_pixel_size=x_pixel_size
         self.y_pixel_size=y_pixel_size
+    
+    def pixel_to_spatial_unit(self, vals):
+        if isinstance(vals, (list, tuple)):
+            return (vals[0]*self.x_pixel_size , vals[1]*self.y_pixel_size)
+        elif isinstance(vals, int):
+            return (vals*self.x_pixel_size , vals*self.y_pixel_size)
+        else:
+            raise Exception(f"Unexpected argument of type {type(vals)}!")
 
 class CompositionDataset(object):
 
