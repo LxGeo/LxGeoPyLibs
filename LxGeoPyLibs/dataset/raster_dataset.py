@@ -1,4 +1,4 @@
-from functools import lru_cache, cached_property
+from functools import lru_cache, cached_property, partial
 import os
 import math
 import rasterio as rio
@@ -9,7 +9,8 @@ from torch.utils.data import Dataset
 from LxGeoPyLibs.vision.image_transformation import Trans_Identity
 import multiprocessing
 from LxGeoPyLibs.geometry.grid import make_grid
-from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset, LazySetupDataset
+from LxGeoPyLibs.ppattern.common_decorators import launchBefore
 from LxGeoPyLibs.dataset.patchified_dataset import PatchifiedDataset, PixelPatchifiedDataset
 import pygeos
 import tqdm
@@ -31,7 +32,7 @@ class RasterRegister(dict):
 rasters_map=RasterRegister()
 
 
-class RasterDataset(PixelPatchifiedDataset):
+class RasterDataset(PixelPatchifiedDataset, LazySetupDataset):
     
     READ_RETRY_COUNT = 4
     DEFAULT_PATCH_SIZE = (256,256)
@@ -56,8 +57,16 @@ class RasterDataset(PixelPatchifiedDataset):
             bounds_geom = raster_total_bound_geom
         
         BoundedDataset.__init__(self, bounds_geom, self.rio_profile["crs"])
-        PixelPatchifiedDataset.__init__(self, self.rio_profile["transform"][0], -self.rio_profile["transform"][4])
-
+        setup_partial_fn = partial(
+            PixelPatchifiedDataset.__init__,
+            self, 
+            self.rio_profile["transform"][0], 
+            -self.rio_profile["transform"][4],
+             pixel_patch_size, pixel_patch_overlap,
+             bounds_geom, self.rio_profile["crs"]
+        )
+        LazySetupDataset.__init__(self, setup_partial_fn)
+        
         if augmentation_transforms is None:
             self.augmentation_transforms=[Trans_Identity()]
         else:
@@ -98,6 +107,7 @@ class RasterDataset(PixelPatchifiedDataset):
     def bounds(self):
         return rasterio.transform.array_bounds(self.rio_profile["height"], self.rio_profile["width"], self.rio_profile["transform"])
 
+    @launchBefore(LazySetupDataset.setup, instance_method=True)
     def __len__(self):
         return PixelPatchifiedDataset.__len__(self)*len(self.augmentation_transforms)
     
@@ -135,6 +145,7 @@ class RasterDataset(PixelPatchifiedDataset):
         
         return img
     
+    @launchBefore(LazySetupDataset.setup, instance_method=True)
     def __getitem__(self, idx):
         
         assert self.is_setup, "Dataset is not set up!"
