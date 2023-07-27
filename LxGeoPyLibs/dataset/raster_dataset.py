@@ -102,8 +102,7 @@ class RasterDataset(PixelPatchifiedDataset):
         return rasterio.transform.array_bounds(self.rio_profile["height"], self.rio_profile["width"], self.rio_profile["transform"])
 
     def __len__(self):
-        assert self.is_setup, "Dataset is not set up!"
-        return super(BoundedDataset, self).__len__()*len(self.augmentation_transforms)
+        return PixelPatchifiedDataset.__len__(self)*len(self.augmentation_transforms)
     
     @lru_cache
     def _load_padded_raster_window(self, window_geom, patch_size=None):
