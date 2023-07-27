@@ -117,7 +117,8 @@ class RasterDataset(PixelPatchifiedDataset):
         for _ in range(self.READ_RETRY_COUNT):
             with self.locker:
                 try:
-                    img = self.rio_dataset().read(window=c_window)
+                    with rio.open(self.image_path) as dst:
+                        img = dst.read(window=c_window)
                     break
                 except rio.errors.RasterioIOError as e:
                     _logger.warn(f"Error reading window from rasterio dataset of raster at {self.image_path}")
