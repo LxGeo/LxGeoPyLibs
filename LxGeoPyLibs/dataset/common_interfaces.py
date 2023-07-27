@@ -10,6 +10,21 @@ class SpatialyProjectedDataset(object):
     def crs(self):
         return self._crs
 
+class LazySetupDataset:
+    def __init__(self, fn=None):
+        self.is_setup=False
+        self.__set_lazysetup_fn(fn)
+    
+    def __set_lazysetup_fn(self, fn):
+        self.lazysetup_fn=fn
+    
+    def setup(self):
+        if not self.is_setup:
+            if not self.lazysetup_fn:
+                raise Exception("LazySetupDataset setup function is not set!")
+            self.lazysetup_fn()
+        self.is_setup=True
+
 class BoundedDataset(SpatialyProjectedDataset):
 
     def __init__(self, bounds_geom, crs=None):
