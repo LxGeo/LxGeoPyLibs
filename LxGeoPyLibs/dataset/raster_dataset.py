@@ -37,7 +37,7 @@ class RasterDataset(PixelPatchifiedDataset):
     DEFAULT_PATCH_SIZE = (256,256)
     DEFAULT_PATCH_OVERLAP = 100
 
-    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, pixel_patch_size=None, pixel_patch_overlap=None):
+    def __init__(self, image_path=None, augmentation_transforms=None,preprocessing=None, bounds_geom=None, pixel_patch_size=DEFAULT_PATCH_SIZE, pixel_patch_overlap=DEFAULT_PATCH_OVERLAP):
                         
         if not os.path.isfile(image_path):
             raise MissingFileException(image_path)
@@ -66,9 +66,6 @@ class RasterDataset(PixelPatchifiedDataset):
         self.Y_size, self.X_size = self.rio_profile["height"], self.rio_profile["width"] ## Check if correct (HW or WH)
         
         self.preprocessing=preprocessing
-        self.is_setup=False
-        if not None in (pixel_patch_size, pixel_patch_overlap):
-            self.setup_patch_per_pixel(pixel_patch_size, pixel_patch_overlap, self.bounds_geom)
     
     @cached_property
     def rio_profile(self):
