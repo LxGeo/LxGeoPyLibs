@@ -9,7 +9,7 @@ import tqdm
 from LxGeoPyLibs.geometry.utils_rio import extents_to_profile
 from LxGeoPyLibs.ppattern.fixed_size_dict import FixSizeOrderedDict
 from typing import Any
-from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset
+from LxGeoPyLibs.dataset.common_interfaces import BoundedDataset, Pixelized2DDataset
 import geopandas as gpd
 
 class PatchifiedDataset(BoundedDataset):
@@ -56,28 +56,15 @@ class PatchifiedDataset(BoundedDataset):
         return gpd.GeoDataFrame(geometry=self.patch_grid, crs=self.crs)
 
 
-class PixelPatchifiedDataset(PatchifiedDataset):
+class PixelPatchifiedDataset(Pixelized2DDataset, PatchifiedDataset):
 
-    def __init__(self, pixel_x_size, pixel_y_size):
-        self.pixel_x_size=pixel_x_size
-        self.pixel_y_size=pixel_y_size
-
-    ### should be fixed to meters not pixels
-    def setup_patch_per_pixel(self, pixel_patch_size, pixel_patch_overlap, bounds_geom):
-        """
-        Setup patch loading settings using spatial coordinates.
-        Args:
-            patch_size: a tuple of positive integers in pixels.
-            patch_overlap: a positive integer in pixels.
-            bounds_geom: pygeos polygon
-        """
-        self.pixel_patch_size= pixel_patch_size
-        self.pixel_patch_overlap= pixel_patch_overlap
-
-        patch_size_spatial = (self.pixel_patch_size[0]*self.pixel_x_size, self.pixel_patch_size[1]*self.pixel_y_size)
-        patch_overlap_spatial = self.pixel_patch_overlap*self.pixel_x_size
-
-        PatchifiedDataset.__init__(self, patch_size_spatial, patch_overlap_spatial, bounds_geom)
+    def __init__(self, pixel_x_size, pixel_y_size, pixel_patch_size, pixel_patch_overlap, bounds_geom, crs=None):
+        Pixelized2DDataset.__init__(self, pixel_x_size, pixel_y_size)
+        self.pixel_patch_size=pixel_patch_size
+        self.pixel_patch_overlap=pixel_patch_overlap
+        spatial_patch_size = self.pixel_to_spatial_unit(pixel_patch_size)
+        spatial_patch_overlap = self.pixel_to_spatial_unit(pixel_patch_overlap)
+        PatchifiedDataset.__init__(self, spatial_patch_size, spatial_patch_overlap, bounds_geom, crs)
 
 class CallableModel():
 
