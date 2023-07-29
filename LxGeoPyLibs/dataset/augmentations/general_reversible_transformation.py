@@ -23,6 +23,7 @@ class GeneralRevrsibleTransformation:
         
     def __call__(self, item, **kwargs):        
         if kwargs.get("reverse", False):
+            kwargs.pop("reverse")
             return self.__rwd__(item, **kwargs)
         else:
             return self.__fwd__(item, **kwargs)
