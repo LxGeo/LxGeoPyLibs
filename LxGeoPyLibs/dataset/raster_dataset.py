@@ -1,4 +1,8 @@
-from functools import lru_cache, cached_property, partial
+from functools import lru_cache, partial
+try:
+    from functools import cached_property
+except:
+    from backports.cached_property import cached_property
 import os
 import math
 import rasterio as rio
@@ -26,7 +30,7 @@ class RasterRegister(dict):
     
     def __del__(self):
         for k,v in self.items():
-            print("Closing raster at {}".format(k))
+            #print("Closing raster at {}".format(k))
             v.close()
 
 rasters_map=RasterRegister()
@@ -111,13 +115,13 @@ class RasterDataset(PixelPatchifiedDataset, LazySetupDataset):
     def __len__(self):
         return PixelPatchifiedDataset.__len__(self)*len(self.augmentation_transforms)
     
-    @lru_cache
+    @lru_cache(maxsize=3)
     def _load_padded_raster_window(self, window_geom, patch_size=None):
         """
         Function to load image data by window and applying respective padding if requiered.
         """
 
-        c_window = rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_profile["transform"]).round_offsets()
+        c_window = window_round(rio.windows.from_bounds(*pygeos.bounds(window_geom), transform=self.rio_profile["transform"]))
         
         img=None
         for _ in range(self.READ_RETRY_COUNT):

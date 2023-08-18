@@ -1,5 +1,8 @@
 from torch.utils.data import Dataset
-from functools import cached_property
+try:
+    from functools import cached_property
+except:
+    from backports.cached_property import cached_property
 import copy
 
 class SpatialyProjectedDataset(object):
