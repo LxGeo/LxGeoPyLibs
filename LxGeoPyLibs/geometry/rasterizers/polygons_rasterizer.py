@@ -28,7 +28,7 @@ def polygons_to_multiclass(geom_container, bounds, crs, contours_width=5, gsd=0.
 
     if isinstance(bounds, pygeos.Geometry):
         bounds = pygeos.bounds(bounds)
-    elif isinstance(bounds, (list, tuple)):
+    elif isinstance(bounds, (list, tuple, np.ndarray)):
         pass
     else:
         raise Exception("bounds type unknown!")
@@ -43,7 +43,7 @@ def polygons_to_multiclass(geom_container, bounds, crs, contours_width=5, gsd=0.
 def polygons_to_multiclass2(gdf, bounds, crs, contours_width=3, gsd=0.5):
     if isinstance(bounds, pygeos.Geometry):
         bounds = pygeos.bounds(bounds)
-    elif isinstance(bounds, (list, tuple)):
+    elif isinstance(bounds, (list, tuple, np.ndarray)):
         pass
     else:
         raise Exception("bounds type unknown!")
@@ -61,6 +61,7 @@ def polygons_to_multiclass2(gdf, bounds, crs, contours_width=3, gsd=0.5):
 
         proba_map = np.stack([background_map, polygon_rasterized, contour_rasterized])
     return proba_map
+
 
 def polygonsWA_to_displacment_map(gdf, bounds, crs, gsd=0.5, disp_x_column_name="disp_x",disp_y_column_name="disp_y", weight_column_name="hrel"):
     """
